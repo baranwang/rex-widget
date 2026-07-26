@@ -1,0 +1,13 @@
+{
+  "type": "tv",
+  "tmdbId": 259231,
+  "title": "斩神之凡尘神域",
+  "providers": [
+    {
+      "season": 2,
+      "provider": "tencent",
+      "idString": "cid=mzc002000iis17y&vid=p4102xxtrs4",
+      "epOffset": 0
+    }
+  ]
+}
