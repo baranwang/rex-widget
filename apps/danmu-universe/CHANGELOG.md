@@ -1,5 +1,11 @@
 # @forward-widget/danmu-universe
 
+## 0.15.7
+
+### Patch Changes
+
+- b296d4a: Add TMDB local mapping for 斩神之凡尘神域.
+
 ## 0.15.6
 
 ### Patch Changes
