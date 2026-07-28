@@ -1,5 +1,11 @@
 # @forward-widget/danmu-universe
 
+## 0.15.8
+
+### Patch Changes
+
+- 7992d89: 改进综艺节目期数、上下篇、加更版本及播出日期的匹配，并补充 360 搜索和具体视频 ID 路由。
+
 ## 0.15.7
 
 ### Patch Changes
