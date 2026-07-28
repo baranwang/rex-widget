@@ -146,7 +146,7 @@ export class TencentScraper extends BaseScraper<typeof tencentIdSchema> {
           provider: this.providerName,
           episodeId: this.generateIdString(tencentId),
           episodeTitle: context?.episodeName?.trim() || tencentId.vid,
-          episodeNumber: episodeNumber ?? requestedIdentity.episodeNumber ?? 0,
+          episodeNumber: episodeNumber ?? requestedIdentity.episodeNumber ?? 1,
           episodePart: requestedIdentity.part,
           episodeEdition: requestedIdentity.edition,
           airDate: context?.airDate,

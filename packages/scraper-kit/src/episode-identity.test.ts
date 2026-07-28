@@ -95,6 +95,7 @@ describe("variety episode identity", () => {
 
   test("does not let period-numbered companion clips override an ordinary requested episode", () => {
     expect(isVarietyEpisodeList(["第1集", "第2集", "主创陪你看第1期"])).toBe(false);
+    expect(isVarietyEpisodeList(["第1集", "第2集", "主创陪你看第1期", "主创陪你看第2期"])).toBe(false);
     expect(
       isVarietyEpisodeList(["第1集", "第2集", "主创陪你看第1期", "主创陪你看第2期"], {
         episodeName: "第二集",

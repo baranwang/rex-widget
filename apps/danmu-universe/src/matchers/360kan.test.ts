@@ -48,6 +48,19 @@ describe("360 variety playlinks", () => {
     });
   });
 
+  test("does not treat an unverified scalar playlink as the requested episode", () => {
+    const scalar = "https://v.qq.com/x/cover/default-show/default-video.html";
+    const collection = "https://v.qq.com/x/cover/collection.html";
+
+    expect(selectQihooPlaylinkUrl(scalar)).toBe(scalar);
+    expect(selectQihooPlaylinkUrl(collection, 8, { episodeName: "第4期下" })).toBe(collection);
+    expect(
+      selectQihooPlaylinkUrl(scalar, 8, {
+        episodeName: "第4期下",
+      }),
+    ).toBeUndefined();
+  });
+
   test("accepts 360's empty-array shape for a search miss", () => {
     expect(
       qihooSearchResponseSchema.parse({
@@ -487,6 +500,99 @@ describe("360 variety playlinks", () => {
       ]);
       expect(requests.filter((url) => url.includes("/index?"))).toHaveLength(3);
       expect(requests.filter((url) => url.includes("/episodeszongyi?"))).toHaveLength(1);
+    } finally {
+      Widget.storage.clear();
+      initializeFetchAdapter({
+        get: Widget.http.get.bind(Widget.http),
+        post: Widget.http.post.bind(Widget.http),
+      });
+    }
+  });
+
+  test("ignores a scalar summary and continues pagination when only the episode response reports the total", async () => {
+    const offsets: number[] = [];
+    Widget.storage.clear();
+    initializeFetchAdapter({
+      async get<T>(url: string) {
+        const parsedUrl = new URL(url);
+        if (parsedUrl.pathname === "/index") {
+          return {
+            data: {
+              data: {
+                longData: {
+                  rows: [
+                    {
+                      cat_id: "3",
+                      id: "pagination-variety",
+                      en_id: "pagination-variety",
+                      cat_name: "综艺",
+                      titleTxt: "分页综艺",
+                      year: "2026",
+                      playlinks: {
+                        qq: "https://v.qq.com/x/cover/default-show/default-video.html",
+                      },
+                    },
+                  ],
+                },
+              },
+            } as T,
+            statusCode: 200,
+            headers: {},
+          };
+        }
+        if (parsedUrl.pathname === "/episodeszongyi") {
+          const offset = Number(parsedUrl.searchParams.get("offset"));
+          offsets.push(offset);
+          return {
+            data: {
+              data: {
+                total: 40,
+                list:
+                  offset === 20
+                    ? [
+                        {
+                          url: "https://v.qq.com/x/cover/show/target.html",
+                          name: "第4期下",
+                        },
+                      ]
+                    : [
+                        {
+                          url: "https://v.qq.com/x/cover/show/newer.html",
+                          name: "第5期",
+                        },
+                      ],
+              },
+            } as T,
+            statusCode: 200,
+            headers: {},
+          };
+        }
+        throw new Error(`Unexpected GET request: ${url}`);
+      },
+      async post<_T>() {
+        throw new Error("Unexpected POST request");
+      },
+    });
+
+    try {
+      await expect(
+        new QihooMatcher().getEpisodeParams({
+          seriesName: "分页综艺",
+          type: "tv",
+          season: 1,
+          episode: 8,
+          episodeName: "第4期下",
+        }),
+      ).resolves.toEqual([
+        {
+          provider: "tencent",
+          idString: "cid=show&vid=target",
+          episodeNumber: 8,
+          episodeName: "第4期下",
+          airDate: undefined,
+        },
+      ]);
+      expect(offsets).toEqual([0, 20]);
     } finally {
       Widget.storage.clear();
       initializeFetchAdapter({

@@ -165,6 +165,16 @@ export const isVarietyEpisodeList = (titles: string[], context: EpisodeMatchCont
   if (requestedTitle && parseVarietyEpisodeIdentity(requestedTitle).episodeNumber === null) {
     return false;
   }
+  const dramaEpisodes = titles.flatMap((title) => {
+    const match = /^(?:正片\s*)?第\s*([0-9]+|[零〇一二两三四五六七八九十百千万萬]+)\s*(?:集|话|話|回)/.exec(
+      normalizeText(title),
+    );
+    const episodeNumber = match?.[1] ? parseIssueNumber(match[1]) : null;
+    return episodeNumber === null ? [] : [episodeNumber];
+  });
+  if (new Set(dramaEpisodes).size >= 2) {
+    return false;
+  }
   const mainIssues = titles.flatMap((title) => {
     const identity = parseVarietyEpisodeIdentity(title);
     return identity.episodeNumber !== null && identity.edition === "main" ? [identity.episodeNumber] : [];

@@ -46,9 +46,7 @@ describe("Tencent variety routing", () => {
       },
     });
 
-    const episodes = await new TencentScraper().getEpisodes("cid=ordinary-drama", 31, {
-      episodeName: "第三十一集",
-    });
+    const episodes = await new TencentScraper().getEpisodes("cid=ordinary-drama", 31);
 
     expect(episodes).toEqual([
       expect.objectContaining({

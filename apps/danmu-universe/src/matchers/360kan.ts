@@ -102,12 +102,26 @@ export const parseQihooMgtvUrl = (url: string) => {
   return dramaMatch ? { dramaId: dramaMatch[1] } : null;
 };
 
+const hasQihooEpisodeCoordinate = (url: string) => {
+  const tencentId = parseQihooTencentUrl(url);
+  if (tencentId?.vid) return true;
+  const youkuId = parseQihooYoukuUrl(url);
+  if (youkuId?.vid) return true;
+  const mgtvId = parseQihooMgtvUrl(url);
+  if (mgtvId && "videoId" in mgtvId) return true;
+  return /^\/v_[^/]+(?:\.html|\/|$)/.test(parseUrl(url).pathname);
+};
+
 export const selectQihooPlaylinkUrl = (
   value: string | QihooEpisodePlaylink[] | undefined,
   episodeNumber?: number,
   context: QihooEpisodeMatchContext = {},
 ) => {
-  if (typeof value === "string") return value;
+  if (typeof value === "string") {
+    const hasRequestedEpisode =
+      episodeNumber !== undefined || Boolean(context.episodeName?.trim()) || Boolean(normalizeAirDate(context.airDate));
+    return hasRequestedEpisode && hasQihooEpisodeCoordinate(value) ? undefined : value;
+  }
   if (!value?.length) return undefined;
 
   const requestedIdentity = parseVarietyEpisodeIdentity(context.episodeName ?? "");
@@ -224,14 +238,14 @@ export class QihooMatcher {
   ) {
     const summary = item.playlinks?.[site];
     const summaryUrl = selectQihooPlaylinkUrl(summary, episodeNumber, context);
-    if (summaryUrl || item.cat_id !== "3" || typeof summary === "string") {
+    if (summaryUrl || item.cat_id !== "3") {
       return summaryUrl;
     }
 
     const pageSize = 20;
     const reportedTotal = item.playlinks_total?.[site];
-    if (!reportedTotal && !Array.isArray(summary)) return undefined;
-    const boundedTotal = Math.min(reportedTotal ?? pageSize, 100);
+    if (!reportedTotal && summary === undefined) return undefined;
+    let boundedTotal = Math.min(reportedTotal ?? pageSize, 100);
     for (let offset = 0; offset < boundedTotal; offset += pageSize) {
       const response = await this.fetch.get(`${this.BASE_API}/episodeszongyi`, {
         params: {
@@ -251,8 +265,10 @@ export class QihooMatcher {
       const matchedUrl = selectQihooPlaylinkUrl(playlinks, episodeNumber, context);
       if (matchedUrl) return matchedUrl;
 
-      const total = Math.min(response.data?.total ?? boundedTotal, 100);
-      if (!playlinks.length || offset + pageSize >= total) break;
+      if (response.data?.total) {
+        boundedTotal = Math.min(response.data.total, 100);
+      }
+      if (!playlinks.length || offset + pageSize >= boundedTotal) break;
     }
     return undefined;
   }

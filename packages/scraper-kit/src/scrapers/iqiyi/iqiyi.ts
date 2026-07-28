@@ -107,7 +107,7 @@ export class IqiyiScraper extends BaseScraper<typeof iqiyiIdSchema> {
           provider: this.providerName,
           episodeId: this.generateIdString(iqiyiId),
           episodeTitle: context?.episodeName?.trim() || iqiyiId.episodeId,
-          episodeNumber: episodeNumber ?? requestedIdentity.episodeNumber ?? 0,
+          episodeNumber: episodeNumber ?? requestedIdentity.episodeNumber ?? 1,
           episodePart: requestedIdentity.part,
           episodeEdition: requestedIdentity.edition,
           airDate: context?.airDate,

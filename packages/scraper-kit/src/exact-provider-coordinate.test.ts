@@ -1,8 +1,25 @@
 import { describe, expect, test } from "@rstest/core";
+import { IqiyiScraper } from "./scrapers/iqiyi";
 import { MgTVScraper } from "./scrapers/mgtv";
 import { RenRenScraper } from "./scrapers/renren";
+import { TencentScraper } from "./scrapers/tencent";
 
 describe("exact provider episode coordinates", () => {
+  test("uses episode one when an exact Tencent or iQiyi coordinate has no client episode context", async () => {
+    await expect(new TencentScraper().getEpisodes("cid=exact-show&vid=exact-video")).resolves.toEqual([
+      expect.objectContaining({
+        episodeId: "cid=exact-show&vid=exact-video",
+        episodeNumber: 1,
+      }),
+    ]);
+    await expect(new IqiyiScraper().getEpisodes("entityId=exact-video&episodeId=exact-video")).resolves.toEqual([
+      expect.objectContaining({
+        episodeId: "entityId=exact-video&episodeId=exact-video",
+        episodeNumber: 1,
+      }),
+    ]);
+  });
+
   test("maps an exact MGTV source issue to the requested client episode", async () => {
     const scraper = new MgTVScraper();
     Reflect.set(scraper, "getEpisodeInfo", async () => [
