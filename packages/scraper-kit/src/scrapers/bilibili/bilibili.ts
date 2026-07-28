@@ -1,5 +1,12 @@
 import { base64ToUint8Array } from "../../runtime";
 import { BaseScraper, type ProviderEpisodeInfo, providerCommentItemSchema } from "../base";
+import {
+  type EpisodeMatchContext,
+  isVarietyEpisodeList,
+  parseVarietyEpisodeIdentity,
+  selectEpisodeCandidates,
+  withClientEpisodeNumber,
+} from "../episode-identity";
 import { biliproto } from "./dm.proto";
 import { bilibiliIdSchema, pgcEpisodeResultSchema } from "./schema";
 
@@ -30,16 +37,27 @@ export class BilibiliScraper extends BaseScraper<typeof bilibiliIdSchema> {
     super();
     this.fetch.setHeaders({
       Referer: "https://www.bilibili.com/",
+      "User-Agent":
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     });
   }
 
-  async getEpisodes(idString: string, episodeNumber?: number) {
+  async getEpisodes(idString: string, episodeNumber?: number, context?: EpisodeMatchContext) {
     const bilibiliId = this.parseIdString(idString);
     if (!bilibiliId) {
       return [];
     }
     const results: ProviderEpisodeInfo[] = [];
     const episodes = await this.getPgcEpisodes(bilibiliId.seasonId);
+    const requestedIdentity = parseVarietyEpisodeIdentity(context?.episodeName ?? "");
+    const isVariety =
+      requestedIdentity.episodeNumber !== null ||
+      isVarietyEpisodeList(
+        (episodes ?? [])
+          .flatMap((episode) => [episode.title, episode.show_title, episode.long_title])
+          .filter((title) => !this.episodeBlacklistPattern.test(title)),
+        context,
+      );
 
     let episodeIndex = 1;
     for (const item of episodes ?? []) {
@@ -47,7 +65,10 @@ export class BilibiliScraper extends BaseScraper<typeof bilibiliIdSchema> {
         this.logger.warn("预告，跳过，title：", item.title);
         continue;
       }
-      if (this.episodeBlacklistPattern.test(item.title)) {
+      const identity = isVariety
+        ? parseVarietyEpisodeIdentity([item.title, item.show_title, item.long_title].filter(Boolean).join(" "))
+        : { episodeNumber: null, part: "whole" as const, edition: "main" as const };
+      if (!isVariety && this.episodeBlacklistPattern.test(item.title)) {
         this.logger.warn("黑名单，跳过，title：", item.title);
         continue;
       }
@@ -59,14 +80,20 @@ export class BilibiliScraper extends BaseScraper<typeof bilibiliIdSchema> {
           cid: item.cid.toString(),
         }),
         episodeTitle: item.show_title || item.title,
-        episodeNumber: episodeIndex,
+        episodeNumber: isVariety ? (identity.episodeNumber ?? 0) : episodeIndex,
+        episodePart: identity.part,
+        episodeEdition: identity.edition,
       });
       episodeIndex += 1;
     }
-    if (episodeNumber) {
-      return results.filter((ep) => ep.episodeNumber === episodeNumber);
+    if (bilibiliId.aid && bilibiliId.cid) {
+      const exact = results.find((episode) => {
+        const id = this.parseIdString(episode.episodeId);
+        return id?.aid === bilibiliId.aid && id?.cid === bilibiliId.cid;
+      });
+      return exact ? [withClientEpisodeNumber(exact, episodeNumber)] : [];
     }
-    return results;
+    return selectEpisodeCandidates(results, episodeNumber, context);
   }
 
   async getSegments(episodeId: string) {

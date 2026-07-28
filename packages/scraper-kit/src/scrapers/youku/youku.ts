@@ -3,6 +3,12 @@ import Utf8 from "crypto-js/enc-utf8.js";
 import MD5 from "crypto-js/md5.js";
 import { safeJsonParseWithZod, z } from "../../runtime";
 import { BaseScraper, type ProviderEpisodeInfo } from "../base";
+import {
+  type EpisodeMatchContext,
+  normalizeAirDate,
+  parseVarietyEpisodeIdentity,
+  selectEpisodeCandidates,
+} from "../episode-identity";
 import { youkuDanmuResultSchema, youkuEpisodeInfoSchema, youkuIdSchema, youkuVideoResultSchema } from "./schema";
 
 type YoukuEpisodeInfo = z.infer<typeof youkuEpisodeInfoSchema>;
@@ -11,6 +17,9 @@ export class YoukuScraper extends BaseScraper<typeof youkuIdSchema> {
   providerName = "youku";
 
   idSchema = youkuIdSchema;
+
+  protected PROVIDER_SPECIFIC_BLACKLIST =
+    "^(.*?)(抢先(版|篇)?|加更(版|篇)?|花絮|预告|特辑|彩蛋|专访|幕后(故事|花絮)?|直播|纯享|未播|衍生|会员(专属|加长)?|片花|精华|看点|速览|解读|reaction|影评|少年的挑战|同学录)(.*?)$";
 
   async parseProviderUrl(url: URL) {
     if (!url.hostname.includes("youku.com")) {
@@ -33,8 +42,6 @@ export class YoukuScraper extends BaseScraper<typeof youkuIdSchema> {
     };
   }
 
-  private readonly EPISODE_BLACKLIST_KEYWORDS = ["彩蛋", "加更", "走心", "解忧", "纯享"];
-
   constructor() {
     super();
     this.fetch.setHeaders({
@@ -51,80 +58,110 @@ export class YoukuScraper extends BaseScraper<typeof youkuIdSchema> {
     return this.fetch.getCookie("cna") ?? "";
   }
 
-  async getEpisodes(idString: string, episodeNumber?: number) {
+  async getEpisodes(idString: string, episodeNumber?: number, context?: EpisodeMatchContext) {
     const youkuId = this.parseIdString(idString);
     if (!youkuId) {
       return [];
     }
     let showId = youkuId.showId;
-    if (!showId && youkuId.vid) {
+    if (youkuId.vid) {
       const videoInfo = await this.getVideoInfo(youkuId.vid);
-      showId = videoInfo?.show_id ?? "";
+      showId = showId || videoInfo?.show_id || "";
+      if (!showId || !videoInfo) {
+        return [];
+      }
+      const isVariety = videoInfo.category.includes("综艺");
+      const identity = isVariety
+        ? parseVarietyEpisodeIdentity(videoInfo.title)
+        : { episodeNumber: null, part: "whole" as const, edition: "main" as const };
+      const stageAirDate = videoInfo.stage?.match(/^(\d{4})(\d{2})(\d{2})$/);
+      return [
+        {
+          provider: this.providerName,
+          episodeId: this.generateIdString({ showId, vid: videoInfo.id }),
+          episodeTitle: videoInfo.title,
+          episodeNumber: episodeNumber ?? identity.episodeNumber ?? videoInfo.seq ?? 0,
+          episodePart: identity.part,
+          episodeEdition: identity.edition,
+          airDate: stageAirDate
+            ? normalizeAirDate(`${stageAirDate[1]}-${stageAirDate[2]}-${stageAirDate[3]}`)
+            : normalizeAirDate(videoInfo.published),
+        },
+      ];
     }
     if (!showId) {
       return [];
     }
 
     const pageSize = 20;
-    const targetEpisode = episodeNumber ?? 1;
-    const targetPage = Math.max(1, Math.ceil(targetEpisode / pageSize));
+    const targetPage = episodeNumber ? Math.max(1, Math.ceil(episodeNumber / pageSize)) : 1;
 
     try {
-      // 辅助函数：过滤黑名单视频
-      const filterBlacklisted = <T extends { title: string }>(videos: readonly T[]): T[] =>
-        videos.filter((video) => !this.EPISODE_BLACKLIST_KEYWORDS.some((keyword) => video.title.includes(keyword)));
+      const initialPage = await this.getEpisodesPage(showId, targetPage, pageSize);
+      const initialVideos = [...((initialPage?.videos ?? []) as YoukuEpisodeInfo[])];
+      const isVariety = initialVideos.some((video) => video.category.includes("综艺"));
 
-      // 辅助函数：创建 ProviderEpisodeInfo 对象
-      const createEpisodeInfo = (
-        video: { id: string; title: string; seq?: number },
-        episodeNum: number,
-      ): ProviderEpisodeInfo => ({
-        provider: this.providerName,
-        episodeId: this.generateIdString({ showId, vid: video.id }),
-        episodeTitle: video.title,
-        episodeNumber: episodeNum,
+      if (!isVariety) {
+        const sourceVideos = initialVideos.filter((video) => !this.episodeBlacklistPattern.test(video.title));
+        const results = sourceVideos.map<ProviderEpisodeInfo>((video, index) => ({
+          provider: this.providerName,
+          episodeId: this.generateIdString({ showId, vid: video.id }),
+          episodeTitle: video.title,
+          episodeNumber: video.seq ?? (targetPage - 1) * pageSize + index + 1,
+          episodePart: "whole",
+          episodeEdition: "main",
+        }));
+        return selectEpisodeCandidates(results, episodeNumber, context);
+      }
+
+      const total = Number(initialPage?.total ?? 0);
+      const totalPages = Math.max(1, Math.ceil(total / pageSize));
+      const maxPages = Math.min(totalPages, 20);
+      const allVideos = [...initialVideos];
+      for (let page = 1; page <= maxPages; page += 1) {
+        if (page === targetPage) continue;
+        const pageResult = await this.getEpisodesPage(showId, page, pageSize);
+        allVideos.push(...((pageResult?.videos ?? []) as YoukuEpisodeInfo[]));
+      }
+
+      const sortedVideos = [...allVideos].sort(
+        (left, right) =>
+          (left.stage ?? left.published ?? "").localeCompare(right.stage ?? right.published ?? "") ||
+          (left.seq ?? Number.MAX_SAFE_INTEGER) - (right.seq ?? Number.MAX_SAFE_INTEGER),
+      );
+
+      const mainStages = Array.from(
+        new Set(
+          sortedVideos
+            .filter(
+              (video) =>
+                parseVarietyEpisodeIdentity(video.title).edition === "main" &&
+                !this.episodeBlacklistPattern.test(video.title),
+            )
+            .map((video) => video.stage)
+            .filter((stage): stage is string => Boolean(stage)),
+        ),
+      );
+      const stageIssueMap = new Map(mainStages.map((stage, index) => [stage, index + 1]));
+
+      const results = sortedVideos.map<ProviderEpisodeInfo>((video) => {
+        const identity = parseVarietyEpisodeIdentity(video.title);
+        const providerSupplement = identity.edition === "main" && this.episodeBlacklistPattern.test(video.title);
+        const stageAirDate = video.stage?.match(/^(\d{4})(\d{2})(\d{2})$/);
+        return {
+          provider: this.providerName,
+          episodeId: this.generateIdString({ showId, vid: video.id }),
+          episodeTitle: video.title,
+          episodeNumber: identity.episodeNumber ?? stageIssueMap.get(video.stage ?? "") ?? 0,
+          episodePart: identity.part,
+          episodeEdition: providerSupplement ? "bonus" : identity.edition,
+          airDate: stageAirDate
+            ? normalizeAirDate(`${stageAirDate[1]}-${stageAirDate[2]}-${stageAirDate[3]}`)
+            : normalizeAirDate(video.published),
+        };
       });
 
-      // 步骤1：获取目标页数据
-      const firstPage = await this.getEpisodesPage(showId, targetPage, pageSize);
-      const firstVideos = filterBlacklisted((firstPage?.videos ?? []) as YoukuEpisodeInfo[]);
-
-      // 步骤2：检查目标页是否包含目标集数
-      const matchedInFirst = firstVideos.find((v) => v.seq === targetEpisode);
-      if (matchedInFirst) {
-        return [createEpisodeInfo(matchedInFirst, targetEpisode)];
-      }
-
-      // 步骤3：计算需要获取的其他页码
-      const total = Number(firstPage?.total ?? 0);
-      const totalPages = Math.max(1, Math.ceil(total / pageSize));
-      const remainingPages = Array.from({ length: totalPages }, (_, i) => i + 1).filter((p) => p !== targetPage);
-
-      // 步骤4：串行获取剩余页数据（避免QPS限制）
-      const remainingResults = [];
-      for (const page of remainingPages) {
-        const result = await this.getEpisodesPage(showId, page, pageSize);
-        remainingResults.push(result);
-      }
-
-      // 步骤5：合并并过滤所有视频
-      const remainingVideos = filterBlacklisted(
-        remainingResults.flatMap((res) => (res?.videos ?? []) as YoukuEpisodeInfo[]),
-      );
-      const allVideos = [...firstVideos, ...remainingVideos];
-
-      // 步骤6：处理返回结果
-      if (episodeNumber !== undefined) {
-        // 指定了集数：查找并返回单集
-        const matched = allVideos.find((v) => v.seq === targetEpisode);
-        return matched ? [createEpisodeInfo(matched, targetEpisode)] : [];
-      }
-
-      // 未指定集数：返回所有集数（按seq排序）
-      const sortedVideos = allVideos.sort(
-        (a, b) => (a.seq ?? Number.MAX_SAFE_INTEGER) - (b.seq ?? Number.MAX_SAFE_INTEGER),
-      );
-      return sortedVideos.map((video, index) => createEpisodeInfo(video, index + 1));
+      return selectEpisodeCandidates(results, episodeNumber, context);
     } catch (error) {
       this.logger.error("获取分集失败，showId：", showId, "错误：", error);
       return [];

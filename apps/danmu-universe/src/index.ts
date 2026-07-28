@@ -265,12 +265,36 @@ searchDanmu = async (params) => {
     }));
   };
 
+  const addEpisodeContext = (items: GetEpisodeParam[]) =>
+    items.map((item) => ({
+      ...item,
+      ...(params.episodeName ? { episodeName: params.episodeName.toString() } : {}),
+      ...(params.airDate ? { airDate: params.airDate.toString() } : {}),
+    }));
+
   const getMatchedEpisodes = async (items: GetEpisodeParam[], filterByRequestedEpisode = true) => {
-    let matchedEpisodes = await scraper.getEpisodes(...(filterByRequestedEpisode ? addEpisodeNumber(items) : items));
+    const requestedItems = filterByRequestedEpisode ? addEpisodeNumber(items) : items;
+    let matchedEpisodes = await scraper.getEpisodes(...addEpisodeContext(requestedItems));
     if (filterByRequestedEpisode && mediaType === "tv" && episode) {
       matchedEpisodes = matchedEpisodes.filter((item) => item.episodeNumber === parseInt(episode, 10));
     }
     return matchedEpisodes;
+  };
+
+  const normalizeDoubanTvCollections = (items: GetEpisodeParam[]) => {
+    if (mediaType !== "tv") return items;
+    return items.map((item) => {
+      if (item.provider !== "tencent") return item;
+      try {
+        const { cid } = scraper.scraperMap.tencent.parseProviderIdString(item.idString);
+        return {
+          ...item,
+          idString: scraper.scraperMap.tencent.generateIdString({ cid }),
+        };
+      } catch {
+        return item;
+      }
+    });
   };
 
   const toSearchResult = (episodes: Awaited<ReturnType<typeof scraper.getEpisodes>>) => ({
@@ -306,7 +330,7 @@ searchDanmu = async (params) => {
 
   const doubanMatcher = new DoubanMatcher();
   const { doubanIds, videoPlatformInfo } = await doubanMatcher.getEpisodeParams(params);
-  episodesParams = episodesParams.concat(videoPlatformInfo);
+  episodesParams = episodesParams.concat(normalizeDoubanTvCollections(videoPlatformInfo));
 
   try {
     if (
@@ -322,12 +346,16 @@ searchDanmu = async (params) => {
     console.error(error);
   }
 
-  if ((!episodesParams?.length && fuzzyMatch === "auto") || fuzzyMatch === "always") {
+  if (fuzzyMatch === "always") {
     const searchEpisodes = await scraper.getEpisodeParams(params);
     episodesParams = episodesParams.concat(searchEpisodes);
   }
 
-  const episodes = await getMatchedEpisodes(episodesParams);
+  let episodes = await getMatchedEpisodes(episodesParams);
+  if (!episodes.length && fuzzyMatch === "auto") {
+    const searchEpisodes = await scraper.getEpisodeParams(params);
+    episodes = await getMatchedEpisodes(searchEpisodes);
+  }
 
   if (!episodes.length && checkShowEmptyAnimeTitle(params)) {
     return {
@@ -345,12 +373,15 @@ searchDanmu = async (params) => {
 getDetail = async (params) => {
   scraper.setGlobalParams(params);
 
-  const { animeId, type: mediaType, episode } = params;
+  const { animeId, type: mediaType, episode, episodeName, airDate } = params;
   if (!animeId || animeId === EMPTY_ANIME_CONFIG.ID) {
     return null;
   }
 
-  return scraper.getDetailWithAnimeId(animeId.toString(), mediaType as MediaType, episode);
+  return scraper.getDetailWithAnimeId(animeId.toString(), mediaType as MediaType, episode, {
+    ...(episodeName ? { episodeName: episodeName.toString() } : {}),
+    ...(airDate ? { airDate: airDate.toString() } : {}),
+  });
 };
 
 getComments = async (params) => {

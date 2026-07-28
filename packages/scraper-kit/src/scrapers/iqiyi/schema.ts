@@ -3,8 +3,10 @@ import { DEFAULT_COLOR_HEX, z } from "../../runtime";
 import { providerCommentItemSchema } from "../base";
 
 export const iqiyiIdSchema = z.object({
-  /** entity_id / tv_id */
+  /** 用于展开专辑分集的 entity_id / tv_id */
   entityId: z.string(),
+  /** 已经确定的具体分集 entity_id / tv_id */
+  episodeId: z.string().optional(),
 });
 
 export type IqiyiId = z.infer<typeof iqiyiIdSchema>;
