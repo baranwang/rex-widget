@@ -59,6 +59,20 @@ export * from "./scrapers/bilibili";
 export { getEpisodeBlacklistPattern } from "./scrapers/blacklist";
 export type { GlobalParamsConfig, Unflatten } from "./scrapers/config";
 export { globalParamsConfigSchema } from "./scrapers/config";
+export type {
+  EpisodeEdition,
+  EpisodeMatchContext,
+  EpisodePart,
+  ParsedEpisodeIdentity,
+} from "./scrapers/episode-identity";
+export {
+  isVarietyEpisodeList,
+  normalizeAirDate,
+  parseVarietyEpisodeIdentity,
+  selectEpisodeCandidates,
+  sortEpisodeCandidates,
+  withClientEpisodeNumber,
+} from "./scrapers/episode-identity";
 export * from "./scrapers/iqiyi";
 export * from "./scrapers/mgtv";
 export { parseEpNumber } from "./scrapers/parse-ep-number";

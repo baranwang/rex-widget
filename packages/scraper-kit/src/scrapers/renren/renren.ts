@@ -4,6 +4,7 @@ import { compact, isNil } from "es-toolkit";
 import type { HttpResponse, RequestOptions } from "../../runtime";
 import { generateUUID, searchDanmuParamsSchema, TTL_1_DAY, z } from "../../runtime";
 import { BaseScraper, type ProviderDramaInfo, type ProviderEpisodeInfo, type SearchDanmuParams } from "../base";
+import { type EpisodeMatchContext, selectEpisodeCandidates, withClientEpisodeNumber } from "../episode-identity";
 import {
   aesResponeSchema,
   renrenCommentItemSchema,
@@ -118,7 +119,7 @@ export class RenRenScraper extends BaseScraper<typeof renrenIdSchema> {
     return results;
   }
 
-  async getEpisodes(idString: string, episodeNumber?: number) {
+  async getEpisodes(idString: string, episodeNumber?: number, context?: EpisodeMatchContext) {
     const renrenId = this.parseIdString(idString);
     if (!renrenId) {
       return [];
@@ -136,10 +137,11 @@ export class RenRenScraper extends BaseScraper<typeof renrenIdSchema> {
       }),
     );
 
-    if (!isNil(episodeNumber)) {
-      return episodes.filter((episode) => episode.episodeNumber === episodeNumber);
+    if (!isNil(renrenId.episodeId)) {
+      const exact = episodes.find((episode) => this.parseIdString(episode.episodeId)?.episodeId === renrenId.episodeId);
+      return exact ? [withClientEpisodeNumber(exact, episodeNumber)] : [];
     }
-    return episodes;
+    return selectEpisodeCandidates(episodes, episodeNumber, context);
   }
 
   async getSegments() {

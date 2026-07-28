@@ -2,7 +2,6 @@ import { compact } from "es-toolkit";
 import { reduceRight } from "es-toolkit/compat";
 import { DEFAULT_COLOR_INT, MediaType, z } from "../../runtime";
 import { CommentMode, providerCommentItemSchema } from "../base";
-import { getEpisodeBlacklistPattern } from "../blacklist";
 
 export const mgtvIdSchema = z.object({
   dramaId: z.string(),
@@ -59,10 +58,6 @@ export const mgtvSearchResponseSchema = z
   })
   .transform((v) => compact(v.data.contents.flat()));
 
-const episodeBlacklistPattern = getEpisodeBlacklistPattern(
-  "^(.*?)(抢先(看|版)|加更(版)?|花絮|预告|特辑|(特别|惊喜|纳凉)?企划|彩蛋|专访|幕后(花絮)?|直播|纯享|未播|衍生|番外|合伙人手记|会员(专享|加长)|片花|精华|看点|速看|解读|reaction|超前营业|超前(vlog)?|陪看(记)?|.{3,}篇|影评)(.*?)$",
-);
-
 export const mgtvEpisodeInfoResponseSchema = z.object({
   data: z.object({
     tab_m: z
@@ -82,8 +77,8 @@ export const mgtvEpisodeInfoResponseSchema = z.object({
                 isIntact: z.string(),
                 isnew: z.string(),
                 video_id: z.string(),
-                t1: z.string().refine((v) => !episodeBlacklistPattern.test(v)),
-                t2: z.string().refine((v) => !episodeBlacklistPattern.test(v)),
+                t1: z.string(),
+                t2: z.string(),
                 t3: z.string(),
                 time: z.string().transform((v) => {
                   return reduceRight(

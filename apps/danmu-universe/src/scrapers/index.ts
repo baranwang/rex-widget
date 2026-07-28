@@ -1,4 +1,4 @@
-import { createScraperRegistry, type ScraperProviderMap } from "@forward-widget/scraper-kit";
+import { createScraperRegistry, type EpisodeMatchContext, type ScraperProviderMap } from "@forward-widget/scraper-kit";
 import { isEqual, sortBy, uniqWith } from "es-toolkit";
 import { MediaType } from "../libs/constants";
 import { QihooMatcher } from "../matchers/360kan";
@@ -15,6 +15,8 @@ export type GetEpisodeParam = {
   provider: string;
   idString: string;
   episodeNumber?: number;
+  episodeName?: string;
+  airDate?: string;
 };
 
 export class Scraper {
@@ -162,11 +164,11 @@ export class Scraper {
 
   async getEpisodes(...args: GetEpisodeParam[]) {
     const tasks: Promise<ProviderEpisodeInfo[]>[] = [];
-    for (const { provider, idString, episodeNumber } of uniqWith(args, isEqual)) {
+    for (const { provider, idString, episodeNumber, episodeName, airDate } of uniqWith(args, isEqual)) {
       const scraper = this.scraperMap[provider];
       if (!scraper) continue;
       tasks.push(
-        scraper.getEpisodes(idString, episodeNumber).catch((error) => {
+        scraper.getEpisodes(idString, episodeNumber, { episodeName, airDate }).catch((error) => {
           console.error(error);
           return [];
         }),
@@ -192,9 +194,19 @@ export class Scraper {
     return undefined;
   }
 
-  async getDetailWithAnimeId(animeId: string, mediaType: MediaType, episode?: string) {
+  async getDetailWithAnimeId(
+    animeId: string,
+    mediaType: MediaType,
+    episode?: string,
+    context: EpisodeMatchContext = {},
+  ) {
     const [provider, idString] = animeId.split(":");
-    return await this.getEpisodes({ provider, idString, episodeNumber: this.getEpisodeNumber(mediaType, episode) });
+    return await this.getEpisodes({
+      provider,
+      idString,
+      episodeNumber: this.getEpisodeNumber(mediaType, episode),
+      ...context,
+    });
   }
 
   async getEpisodeParams(searchParams: SearchDanmuParams) {
@@ -211,7 +223,6 @@ export class Scraper {
     }
     const results = await Promise.all(dramaTasks);
     const dramas = results.flat();
-    if (!dramas.length) return [];
 
     const episodeNumber = this.getEpisodeNumber(searchParams.type as MediaType, searchParams.episode);
     const options: GetEpisodeParam[] = [];
@@ -220,7 +231,13 @@ export class Scraper {
         const scraper = this.scraperMap[drama.provider];
         if (!scraper) continue;
         const idString = scraper.generateIdString({ dramaId: drama.dramaId });
-        options.push({ provider: drama.provider, idString, episodeNumber });
+        options.push({
+          provider: drama.provider,
+          idString,
+          episodeNumber,
+          episodeName: searchParams.episodeName as string | undefined,
+          airDate: searchParams.airDate as string | undefined,
+        });
       } catch (_error) {}
     }
 

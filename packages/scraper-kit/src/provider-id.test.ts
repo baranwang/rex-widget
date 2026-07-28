@@ -16,6 +16,7 @@ describe("provider-id contracts", () => {
     expect(generateProviderIdString("tencent", { cid: "c1", vid: "v1" })).toBe("cid=c1&vid=v1");
     expect(generateProviderIdString("youku", { showId: "s1", vid: "v1" })).toBe("showId=s1&vid=v1");
     expect(generateProviderIdString("iqiyi", { entityId: "e1" })).toBe("entityId=e1");
+    expect(generateProviderIdString("iqiyi", { entityId: "e1", episodeId: "e2" })).toBe("entityId=e1&episodeId=e2");
     expect(generateProviderIdString("bilibili", { seasonId: "45962" })).toBe("seasonId=45962");
     expect(generateProviderIdString("bilibili", { seasonId: "45962", aid: "1", cid: "2" })).toBe(
       "seasonId=45962&aid=1&cid=2",
@@ -31,6 +32,10 @@ describe("provider-id contracts", () => {
     expect(parseProviderIdString("tencent", "cid=c1&vid=v1")).toEqual({ cid: "c1", vid: "v1" });
     expect(parseProviderIdString("youku", "showId=s1&vid=v1")).toEqual({ showId: "s1", vid: "v1" });
     expect(parseProviderIdString("iqiyi", "entityId=e1")).toEqual({ entityId: "e1" });
+    expect(parseProviderIdString("iqiyi", "entityId=e1&episodeId=e2")).toEqual({
+      entityId: "e1",
+      episodeId: "e2",
+    });
     expect(parseProviderIdString("bilibili", "seasonId=45962")).toEqual({ seasonId: "45962" });
     expect(parseProviderIdString("bilibili", "seasonId=45962&aid=1&cid=2")).toEqual({
       seasonId: "45962",

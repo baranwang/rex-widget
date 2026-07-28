@@ -108,14 +108,14 @@ describe("provider-url contracts", () => {
   test("parses IQIYI query URLs with tvid/entityId", async () => {
     await expect(parseProviderUrl("https://www.iqiyi.com/?tvid=e1")).resolves.toEqual({
       provider: "iqiyi",
-      id: { entityId: "e1" },
-      idString: "entityId=e1",
+      id: { entityId: "e1", episodeId: "e1" },
+      idString: "entityId=e1&episodeId=e1",
       url: "https://www.iqiyi.com/?tvid=e1",
     });
     await expect(parseProviderUrl("https://www.iqiyi.com/?entityId=e1")).resolves.toEqual({
       provider: "iqiyi",
-      id: { entityId: "e1" },
-      idString: "entityId=e1",
+      id: { entityId: "e1", episodeId: "e1" },
+      idString: "entityId=e1&episodeId=e1",
       url: "https://www.iqiyi.com/?entityId=e1",
     });
   });
@@ -123,8 +123,8 @@ describe("provider-url contracts", () => {
   test("parses IQIYI v_ URL via entityId conversion", async () => {
     await expect(parseProviderUrl("https://www.iqiyi.com/v_mo3lbdn60s.html")).resolves.toEqual({
       provider: "iqiyi",
-      id: { entityId: "2349242958520400" },
-      idString: "entityId=2349242958520400",
+      id: { entityId: "2349242958520400", episodeId: "2349242958520400" },
+      idString: "entityId=2349242958520400&episodeId=2349242958520400",
       url: "https://www.iqiyi.com/v_mo3lbdn60s.html",
     });
   });
@@ -140,8 +140,8 @@ describe("provider-url contracts", () => {
 
   test("parseProviderUrlFor parses IQIYI v_ URL for iqiyi provider", async () => {
     await expect(parseProviderUrlFor("iqiyi", "https://www.iqiyi.com/v_mo3lbdn60s.html")).resolves.toEqual({
-      id: { entityId: "2349242958520400" },
-      idString: "entityId=2349242958520400",
+      id: { entityId: "2349242958520400", episodeId: "2349242958520400" },
+      idString: "entityId=2349242958520400&episodeId=2349242958520400",
       url: "https://www.iqiyi.com/v_mo3lbdn60s.html",
     });
   });

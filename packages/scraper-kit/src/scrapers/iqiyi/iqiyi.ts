@@ -3,6 +3,12 @@ import { XMLParser } from "fast-xml-parser";
 import { z } from "../../runtime";
 import { BaseScraper, type ProviderEpisodeInfo } from "../base";
 import {
+  type EpisodeMatchContext,
+  isVarietyEpisodeList,
+  parseVarietyEpisodeIdentity,
+  selectEpisodeCandidates,
+} from "../episode-identity";
+import {
   iqiyiCommentsResponseSchema,
   iqiyiIdSchema,
   iqiyiV3ApiResponseSchema,
@@ -25,13 +31,13 @@ export class IqiyiScraper extends BaseScraper<typeof iqiyiIdSchema> {
 
     const entityId = url.searchParams.get("entityId") ?? url.searchParams.get("tvid");
     if (entityId) {
-      return { entityId };
+      return { entityId, episodeId: entityId };
     }
 
     const videoId = url.pathname.match(/^\/v_([^/.]+)\.html$/)?.[1];
     if (videoId) {
       const parsedEntityId = this.videoIdToEntityId(videoId);
-      return parsedEntityId ? { entityId: parsedEntityId } : null;
+      return parsedEntityId ? { entityId: parsedEntityId, episodeId: parsedEntityId } : null;
     }
 
     const albumId = url.pathname.match(/^\/a_([^/.]+)\.html$/)?.[1];
@@ -89,22 +95,34 @@ export class IqiyiScraper extends BaseScraper<typeof iqiyiIdSchema> {
     return html.match(/v_([^"'?#\s<>/]+)\.html/)?.[1] ?? null;
   }
 
-  async getEpisodes(idString: string, episodeNumber?: number) {
+  async getEpisodes(idString: string, episodeNumber?: number, context?: EpisodeMatchContext) {
     const iqiyiId = this.parseIdString(idString);
     if (!iqiyiId) {
       return [];
     }
+    const requestedIdentity = parseVarietyEpisodeIdentity(context?.episodeName ?? "");
+    if (iqiyiId.episodeId) {
+      return [
+        {
+          provider: this.providerName,
+          episodeId: this.generateIdString(iqiyiId),
+          episodeTitle: context?.episodeName?.trim() || iqiyiId.episodeId,
+          episodeNumber: episodeNumber ?? requestedIdentity.episodeNumber ?? 1,
+          episodePart: requestedIdentity.part,
+          episodeEdition: requestedIdentity.edition,
+          airDate: context?.airDate,
+        },
+      ];
+    }
+
     let providerEpisodes: ProviderEpisodeInfo[] = [];
     try {
-      providerEpisodes = await this.getEpisodesV3(iqiyiId.entityId);
+      providerEpisodes = await this.getEpisodesV3(iqiyiId.entityId, requestedIdentity.episodeNumber !== null, context);
     } catch (error) {
       this.logger.warn("新版API (v3) 获取分集时发生错误：", error);
       providerEpisodes = [];
     }
-    if (episodeNumber) {
-      return providerEpisodes.filter((ep) => ep.episodeNumber === episodeNumber);
-    }
-    return providerEpisodes;
+    return selectEpisodeCandidates(providerEpisodes, episodeNumber, context);
   }
 
   async getSegments(episodeId: string) {
@@ -112,7 +130,7 @@ export class IqiyiScraper extends BaseScraper<typeof iqiyiIdSchema> {
     if (!iqiyiId) {
       return [];
     }
-    const baseInfo = await this.getVideoBaseInfo(iqiyiId.entityId);
+    const baseInfo = await this.getVideoBaseInfo(iqiyiId.episodeId ?? iqiyiId.entityId);
     const duration = baseInfo?.durationSec;
     if (!duration) {
       return [];
@@ -130,7 +148,7 @@ export class IqiyiScraper extends BaseScraper<typeof iqiyiIdSchema> {
     if (!iqiyiId) {
       return [];
     }
-    const tvId = iqiyiId.entityId;
+    const tvId = iqiyiId.episodeId ?? iqiyiId.entityId;
 
     if (!tvId || tvId.length < 4) {
       return [];
@@ -153,7 +171,7 @@ export class IqiyiScraper extends BaseScraper<typeof iqiyiIdSchema> {
     return data;
   }
 
-  private async getEpisodesV3(entityId: string) {
+  private async getEpisodesV3(entityId: string, forceVariety = false, context?: EpisodeMatchContext) {
     const timestamp = Date.now().toString();
     const params: Record<string, string> = {
       entity_id: entityId,
@@ -187,6 +205,14 @@ export class IqiyiScraper extends BaseScraper<typeof iqiyiIdSchema> {
       }
 
       const episodes: ProviderEpisodeInfo[] = [];
+      const isVariety =
+        forceVariety ||
+        isVarietyEpisodeList(
+          response.data
+            .filter((episode) => !this.episodeBlacklistPattern.test(episode.title))
+            .flatMap((episode) => [episode.short_display_name ?? "", episode.title]),
+          context,
+        );
 
       let episodeIndex = 1;
       for (const ep of response.data) {
@@ -200,16 +226,23 @@ export class IqiyiScraper extends BaseScraper<typeof iqiyiIdSchema> {
         if (!entityId) {
           continue;
         }
-        if (this.episodeBlacklistPattern.test(ep.title)) {
+        if (!isVariety && this.episodeBlacklistPattern.test(ep.title)) {
           continue;
         }
+        const identity = isVariety
+          ? parseVarietyEpisodeIdentity(`${ep.short_display_name ?? ""} ${ep.title}`)
+          : { episodeNumber: null, part: "whole" as const, edition: "main" as const };
         episodes.push({
           provider: this.providerName,
-          episodeId: this.generateIdString({ entityId }),
+          episodeId: this.generateIdString({ entityId, episodeId: entityId }),
           episodeTitle: ep.title,
-          episodeNumber: ep.short_display_name
-            ? (this.getEpisodeIndexFromTitle(ep.short_display_name) ?? episodeIndex)
-            : episodeIndex,
+          episodeNumber: isVariety
+            ? (identity.episodeNumber ?? 0)
+            : ep.short_display_name
+              ? (this.getEpisodeIndexFromTitle(ep.short_display_name) ?? episodeIndex)
+              : episodeIndex,
+          episodePart: identity.part,
+          episodeEdition: identity.edition,
         });
         episodeIndex += 1;
       }

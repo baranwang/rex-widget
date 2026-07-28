@@ -2,6 +2,7 @@ import { parse as parseQueryStringify, stringify as stringifyQueryStringify } fr
 import { DEFAULT_COLOR_INT, Fetch, Logger, z } from "../runtime";
 import { getEpisodeBlacklistPattern } from "./blacklist";
 import type { GlobalParamsConfig } from "./config";
+import type { EpisodeEdition, EpisodeMatchContext, EpisodePart } from "./episode-identity";
 import { parseEpNumber } from "./parse-ep-number";
 
 export interface ProviderDramaInfo {
@@ -16,6 +17,9 @@ export interface ProviderEpisodeInfo {
   episodeId: string;
   episodeTitle: string;
   episodeNumber: number;
+  episodePart?: EpisodePart;
+  episodeEdition?: EpisodeEdition;
+  airDate?: string;
 }
 
 export interface ProviderSegmentInfo {
@@ -115,7 +119,11 @@ export abstract class BaseScraper<IDType extends z.ZodType = z.ZodType> {
 
   search?(params: SearchDanmuParams): Promise<ProviderDramaInfo[]>;
 
-  abstract getEpisodes(idString: string, episodeIndex?: number): Promise<ProviderEpisodeInfo[]>;
+  abstract getEpisodes(
+    idString: string,
+    episodeIndex?: number,
+    context?: EpisodeMatchContext,
+  ): Promise<ProviderEpisodeInfo[]>;
 
   abstract getSegments(idString: string): Promise<ProviderSegmentInfo[]>;
 

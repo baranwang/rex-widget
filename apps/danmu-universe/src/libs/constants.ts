@@ -19,6 +19,7 @@ export const searchDanmuParamsSchema = z.object({
     .catch(MediaType.Movie),
   title: z.coerce.string().optional(),
   seriesName: z.coerce.string().optional(),
+  episodeName: z.coerce.string().optional(),
   season: z.coerce.number().optional(),
   airDate: z.coerce.string().optional(),
   episode: z.coerce.number().optional(),

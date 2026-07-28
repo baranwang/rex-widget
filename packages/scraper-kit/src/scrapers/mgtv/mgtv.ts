@@ -3,6 +3,13 @@ import { uniqBy } from "es-toolkit";
 import { MediaType, searchDanmuParamsSchema, TTL_1_DAY, z } from "../../runtime";
 import { BaseScraper, type ProviderDramaInfo, type ProviderEpisodeInfo, type SearchDanmuParams } from "../base";
 import {
+  type EpisodeMatchContext,
+  isVarietyEpisodeList,
+  parseVarietyEpisodeIdentity,
+  selectEpisodeCandidates,
+  withClientEpisodeNumber,
+} from "../episode-identity";
+import {
   type MgtvEpisodeInfo,
   mgtvCommentConfigResponseSchema,
   mgtvCommentResponseSchema,
@@ -15,6 +22,9 @@ export class MgTVScraper extends BaseScraper<typeof mgtvIdSchema> {
   providerName = "mgtv";
 
   idSchema = mgtvIdSchema;
+
+  protected PROVIDER_SPECIFIC_BLACKLIST =
+    "^(.*?)(抢先(看|版)|加更(版)?|花絮|预告|特辑|(特别|惊喜|纳凉)?企划|彩蛋|专访|幕后(花絮)?|直播|纯享|未播|衍生|番外|合伙人手记|会员(专享|加长)|片花|精华|看点|速看|解读|reaction|超前营业|超前(vlog)?|陪看(记)?|.{3,}篇|影评)(.*?)$";
 
   async parseProviderUrl(url: URL) {
     if (url.hostname !== "www.mgtv.com" && url.hostname !== "mgtv.com") {
@@ -106,7 +116,7 @@ export class MgTVScraper extends BaseScraper<typeof mgtvIdSchema> {
     return results;
   }
 
-  async getEpisodes(idString: string, episodeIndex?: number) {
+  async getEpisodes(idString: string, episodeIndex?: number, context?: EpisodeMatchContext) {
     const mgtvId = this.parseIdString(idString);
     if (!mgtvId) {
       return [];
@@ -115,16 +125,42 @@ export class MgTVScraper extends BaseScraper<typeof mgtvIdSchema> {
     if (!episodes?.length) {
       return [];
     }
-    const results = episodes.map<ProviderEpisodeInfo>((ep, index) => ({
-      provider: this.providerName,
-      episodeId: this.generateIdString({ dramaId: mgtvId.dramaId, videoId: ep.video_id }),
-      episodeTitle: ep.t3,
-      episodeNumber: this.getEpisodeIndexFromTitle(ep.t2) ?? index + 1,
-    }));
-    if (episodeIndex) {
-      return results.filter((ep) => ep.episodeNumber === episodeIndex);
+    const requestedIdentity = parseVarietyEpisodeIdentity(context?.episodeName ?? "");
+    const isVariety =
+      requestedIdentity.episodeNumber !== null ||
+      isVarietyEpisodeList(
+        episodes
+          .filter(
+            (episode) =>
+              !this.episodeBlacklistPattern.test(episode.t1) && !this.episodeBlacklistPattern.test(episode.t3),
+          )
+          .flatMap((episode) => [episode.t1, episode.t3]),
+        context,
+      );
+    const sourceEpisodes = isVariety
+      ? episodes
+      : episodes.filter(
+          (episode) => !this.episodeBlacklistPattern.test(episode.t1) && !this.episodeBlacklistPattern.test(episode.t2),
+        );
+    const results = sourceEpisodes.map<ProviderEpisodeInfo>((ep, index) => {
+      const identity = isVariety
+        ? parseVarietyEpisodeIdentity(`${ep.t1} ${ep.t3}`)
+        : { episodeNumber: null, part: "whole" as const, edition: "main" as const };
+      return {
+        provider: this.providerName,
+        episodeId: this.generateIdString({ dramaId: mgtvId.dramaId, videoId: ep.video_id }),
+        episodeTitle: ep.t3,
+        episodeNumber: isVariety ? (identity.episodeNumber ?? 0) : (this.getEpisodeIndexFromTitle(ep.t2) ?? index + 1),
+        episodePart: identity.part,
+        episodeEdition: identity.edition,
+        airDate: ep.t2,
+      };
+    });
+    if (mgtvId.videoId) {
+      const exact = results.find((episode) => this.parseIdString(episode.episodeId)?.videoId === mgtvId.videoId);
+      return exact ? [withClientEpisodeNumber(exact, episodeIndex)] : [];
     }
-    return results;
+    return selectEpisodeCandidates(results, episodeIndex, context);
   }
 
   async getSegments(idString: string) {
