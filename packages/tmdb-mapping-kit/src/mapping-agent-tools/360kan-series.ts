@@ -1,4 +1,4 @@
-import { createScraperRegistry, generateProviderIdString, parseVarietyEpisodeIdentity } from "@rexnow/scraper-kit";
+import { generateProviderIdString, parseProviderUrl, parseVarietyEpisodeIdentity } from "@rexnow/scraper-kit";
 import type { TmdbHit } from "./tmdb.ts";
 
 export type SearchScope = "tmdb" | "platforms" | "all";
@@ -132,7 +132,7 @@ function parseRow(row: unknown): { cat_id: string; titleTxt: string; playlinks: 
   return { cat_id, titleTxt, playlinks };
 }
 
-function parseSitePlaylink(site: string, url: string): PlatformHit | undefined {
+async function parseSitePlaylink(site: string, url: string): Promise<PlatformHit | undefined> {
   const provider = SITE_PROVIDER_MAP[site];
   if (!provider) {
     return undefined;
@@ -184,50 +184,37 @@ function parseSitePlaylink(site: string, url: string): PlatformHit | undefined {
     if (/^\/bangumi\/play\/ep\d+/.test(parsedUrl.pathname)) {
       return undefined;
     }
-    const seasonMatch = parsedUrl.pathname.match(/^\/bangumi\/play\/ss(\d+)$/);
-    if (!seasonMatch) {
+    const parsed = await parseProviderUrl(url);
+    const seasonId =
+      parsed?.provider === "bilibili" && parsed.id && "seasonId" in parsed.id ? parsed.id.seasonId : undefined;
+    if (!seasonId) {
       return undefined;
     }
     return {
       provider,
-      idString: generateProviderIdString("bilibili", { seasonId: seasonMatch[1] }),
+      idString: generateProviderIdString("bilibili", { seasonId }),
       source: "360kan",
     };
   }
 
   if (site === "qiyi") {
-    let parsedUrl: URL;
-    try {
-      parsedUrl = new URL(url);
-    } catch {
+    const parsed = await parseProviderUrl(url);
+    const entityId =
+      parsed?.provider === "iqiyi" && parsed.id && "entityId" in parsed.id ? parsed.id.entityId : undefined;
+    if (!entityId) {
       return undefined;
     }
-    const iqiyiScraper = createScraperRegistry().scraperMap.iqiyi;
-    const entityId = parsedUrl.searchParams.get("entityId") ?? parsedUrl.searchParams.get("tvid");
-    if (entityId) {
-      return {
-        provider,
-        idString: generateProviderIdString("iqiyi", { entityId }),
-        source: "360kan",
-      };
-    }
-    const videoId = parsedUrl.pathname.match(/^\/v_([^/.]+)\.html$/)?.[1];
-    if (videoId) {
-      const parsedEntityId = iqiyiScraper.videoIdToEntityId(videoId);
-      if (parsedEntityId) {
-        return {
-          provider,
-          idString: generateProviderIdString("iqiyi", { entityId: parsedEntityId }),
-          source: "360kan",
-        };
-      }
-    }
+    return {
+      provider,
+      idString: generateProviderIdString("iqiyi", { entityId }),
+      source: "360kan",
+    };
   }
 
   return undefined;
 }
 
-export function platformsFrom360Rows(rows: unknown[], input: SearchInput): SearchOutput["platforms"] {
+export async function platformsFrom360Rows(rows: unknown[], input: SearchInput): Promise<SearchOutput["platforms"]> {
   const limit = input.limit ?? PLATFORM_LIMIT_DEFAULT;
   const seen = new Set<string>();
   const platforms: SearchOutput["platforms"] = [];
@@ -248,7 +235,7 @@ export function platformsFrom360Rows(rows: unknown[], input: SearchInput): Searc
     }
 
     for (const [site, url] of Object.entries(parsed.playlinks)) {
-      const hit = parseSitePlaylink(site, url);
+      const hit = await parseSitePlaylink(site, url);
       if (!hit) {
         continue;
       }

@@ -101,7 +101,7 @@ async function searchPlatforms(
   fetchImpl: typeof fetch,
 ): Promise<SearchOutput["platforms"]> {
   const rows = await fetch360Rows(input.query, fetchImpl);
-  let platforms = platformsFrom360Rows(rows, input);
+  let platforms = await platformsFrom360Rows(rows, input);
   platforms = await searchMgtvAndRenren(input, platforms);
   const limit = input.limit ?? 12;
   return dedupePlatforms(platforms).slice(0, limit);
