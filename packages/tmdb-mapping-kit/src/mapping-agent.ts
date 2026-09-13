@@ -603,7 +603,7 @@ export function mergeMappingFile(
   };
 }
 
-function readExistingMappingFile(dataPath: string): CanonicalMapping | null {
+export function readExistingMappingFile(dataPath: string): CanonicalMapping | null {
   if (!fs.existsSync(dataPath)) {
     return null;
   }
