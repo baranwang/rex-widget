@@ -1,5 +1,19 @@
 # @rexnow/danmu-universal
 
+## 0.16.0
+
+### Minor Changes
+
+- dc2b01d: Rename Forward Widget to Rex: move packages to the `@rexnow` scope and rename Danmu Universe to Danmu Universal.
+
+### Patch Changes
+
+- Updated dependencies [dc2b01d]
+  - @rexnow/libs-fetch@0.0.1
+  - @rexnow/libs-storage@0.0.1
+  - @rexnow/libs-utils@0.0.1
+  - @rexnow/scraper-kit@0.0.1
+
 ## 0.15.8
 
 ### Patch Changes
