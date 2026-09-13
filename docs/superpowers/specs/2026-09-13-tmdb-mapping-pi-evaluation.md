@@ -133,7 +133,7 @@ mapping-kit 已有、不必让模型手写：
 
 ### 搜索合成一个 `search` 工具
 
-`search_tmdb` 和 `search_360kan` 动词一样（按标题搜），作业不同，不要做成「一次调用两边都打」。合成 **一个工具 + 必填 `scope`**：
+`search_tmdb` 和 `search_360kan` 合成 **一个 `search` 工具**。默认 `scope: "all"`，一次并行查 TMDB 和平台；仍可用 `tmdb` / `platforms` 收窄。
 
 | scope | 做什么 | 结果槽 |
 | --- | --- | --- |
@@ -146,7 +146,7 @@ mapping-kit 已有、不必让模型手写：
 ```ts
 {
   query: string,
-  scope: "tmdb" | "platforms" | "all",
+  scope?: "tmdb" | "platforms" | "all", // 默认 "all"
   type?: "movie" | "tv",       // tmdb 缺省则 movie+tv 都搜；platforms 用来滤 360 cat
   year?: number,
   season?: number,
@@ -169,7 +169,7 @@ mapping-kit 已有、不必让模型手写：
 }
 ```
 
-`scope` 必填，不默认 `all`。issue 多半已有 `tmdb_url`，只缺平台时不该顺带打 360。
+`scope` 默认 `"all"`。模型只想查一侧时再显式传 `tmdb` 或 `platforms`。一侧失败另一侧仍返回；失败写进该槽的空结果，不要整工具 throw。
 
 平台侧上提时只要搜索结果里的 **摘要 playlink**（`/x/cover/{cid}.html`、`/h/{dramaId}.html`、B 站 `season_id`），剥掉 vid / videoId / 单集 entityId。`QihooMatcher.getEpisodeParams` 留给运行时搜弹幕，不进 mapping 工具。
 
@@ -181,7 +181,7 @@ v1 挂这些：
 
 | 工具 | 后端 |
 | --- | --- |
-| `search` | 上面的统一搜索 |
+| `search` | 默认 `all`：TMDB + 360/芒果/人人并行 |
 | `get_tmdb` | TMDB 详情；TV 可带 season 拿分集名（算 epRange / epOffset） |
 | `parse_provider_url` | `parseProviderUrl` |
 | `parse_id_string` / `make_id_string` | `parseProviderIdStringFor` / `generateProviderIdString` |
