@@ -41,13 +41,12 @@ import {
 const { session } = await createAgentSession({
   model,
   customTools: [
-    searchTmdb,
+    search,
     getTmdb,
     parseProviderUrl,
     parseIdString,
     makeIdString,
     parseEpisodeTitle,
-    searchProvider,
     listEpisodes,
     listExistingMapping,
     previewMerge,
@@ -60,13 +59,12 @@ const { session } = await createAgentSession({
     "grep",
     "find",
     "ls",
-    "search_tmdb",
+    "search",
     "get_tmdb",
     "parse_provider_url",
     "parse_id_string",
     "make_id_string",
     "parse_episode_title",
-    "search_provider",
     "list_episodes",
     "list_existing_mapping",
     "preview_merge",
@@ -131,7 +129,51 @@ mapping-kit 已有、不必让模型手写：
 - `data/{type}/{tmdbId}.json` 已有映射
 - `lookupLocalMap` / `getLocalEpisodeParams` 在 `apps/danmu-universal`（读生成后的 local map；kit 侧可读源 JSON）
 
-缺口：tencent / youku / iqiyi / bilibili **没有** `search`。运行时靠 `apps/danmu-universal` 的实验性 `QihooMatcher`（360 影视）补。它不在 scraper-kit，kit 不能直接 import app。要做成一等工具，得把 360kan 搜链接逻辑上提到 kit / mapping-kit。
+缺口：tencent / youku / iqiyi / bilibili **没有** `search`。运行时靠 `apps/danmu-universal` 的实验性 `QihooMatcher`（360 影视）补。它不在 scraper-kit，kit 不能直接 import app。平台搜索要做成一等工具，得把 **剧集级** playlink 解析上提到 kit / mapping-kit——不要直接复用 `QihooMatcher.getEpisodeParams`（那是按集找播放页，会吐出带 vid / episodeId 的坐标）。
+
+### 搜索合成一个 `search` 工具
+
+`search_tmdb` 和 `search_360kan` 动词一样（按标题搜），作业不同，不要做成「一次调用两边都打」。合成 **一个工具 + 必填 `scope`**：
+
+| scope | 做什么 | 结果槽 |
+| --- | --- | --- |
+| `tmdb` | `GET /3/search/{movie\|tv}` | `tmdb[]` |
+| `platforms` | 360 影视剧集级 playlink + mgtv/renren `search` | `platforms[]` |
+| `all` | 上面两个并行 | 两个槽都填 |
+
+入参：
+
+```ts
+{
+  query: string,
+  scope: "tmdb" | "platforms" | "all",
+  type?: "movie" | "tv",       // tmdb 缺省则 movie+tv 都搜；platforms 用来滤 360 cat
+  year?: number,
+  season?: number,
+  providers?: ProviderName[],  // 只限制 platforms
+  limit?: number               // 默认 tmdb 8 / platforms 12
+}
+```
+
+出参（缺的一侧给 `[]`）：
+
+```ts
+{
+  tmdb: Array<{ tmdbId: number, type: "movie" | "tv", title: string, year?: number, url: string }>,
+  platforms: Array<{
+    provider: ProviderName,
+    idString: string,          // 剧集级：cid / showId / seasonId / dramaId / entityId
+    source: "360kan" | "mgtv" | "renren",
+    title?: string
+  }>
+}
+```
+
+`scope` 必填，不默认 `all`。issue 多半已有 `tmdb_url`，只缺平台时不该顺带打 360。
+
+平台侧上提时只要搜索结果里的 **摘要 playlink**（`/x/cover/{cid}.html`、`/h/{dramaId}.html`、B 站 `season_id`），剥掉 vid / videoId / 单集 entityId。`QihooMatcher.getEpisodeParams` 留给运行时搜弹幕，不进 mapping 工具。
+
+`search_provider` 不再单独挂，并进 `scope: "platforms"`。
 
 ### 领域工具（`defineTool`）
 
@@ -139,24 +181,18 @@ v1 挂这些：
 
 | 工具 | 后端 |
 | --- | --- |
-| `search_tmdb` | `GET /search/{movie\|tv}` |
+| `search` | 上面的统一搜索 |
 | `get_tmdb` | TMDB 详情；TV 可带 season 拿分集名（算 epRange / epOffset） |
 | `parse_provider_url` | `parseProviderUrl` |
 | `parse_id_string` / `make_id_string` | `parseProviderIdStringFor` / `generateProviderIdString` |
 | `parse_episode_title` | `parseVarietyEpisodeIdentity` |
-| `search_provider` | 仅 mgtv / renren 的 `search`；其它 provider 明确返回 unsupported |
 | `list_episodes` | `getEpisodes`，可带 `episodeNumber` / `episodeName` / `airDate` |
 | `list_existing_mapping` | 读 `data/{type}/{tmdbId}.json` |
 | `preview_merge` | `mergeMappingFile` dry-run + Zod |
 | `probe_mapping` | 按 season / epRange / epOffset 调 `getEpisodes` |
 | `submit_mapping` | 唯一收口，`terminate: true` |
 
-候选、默认不挂：
-
-| 工具 | 原因 |
-| --- | --- |
-| `search_360kan` | 能补 4 家无 search 的平台，但代码在 app 里，要先上提 |
-| `get_segments` / `get_comments` | 对写 mapping 没帮助 |
+不挂：`get_segments` / `get_comments`。
 
 `bash` 能跑单测，也能 `curl`。领域工具仍保留：返回截断后的结构化 JSON。`probe_mapping` 仍是「这条 mapping 能不能拉到分集」的直接证据。
 
