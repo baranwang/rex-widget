@@ -150,10 +150,9 @@ function mappingAgentRequestSignal(): AbortSignal {
   return AbortSignal.timeout(mappingAgentRequestTimeoutMs);
 }
 
-type ModelSelection = {
-  providerID: string;
-  modelID: string;
-};
+import { modelSelection } from "./mapping-agent-env.ts";
+
+export { mappingModelSelection, modelSelection } from "./mapping-agent-env.ts";
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -647,35 +646,6 @@ export function writeMappingAgentSummary(summaryPath: string | undefined, summar
     return;
   }
   fs.writeFileSync(summaryPath, `${JSON.stringify(summary, null, 2)}\n`);
-}
-
-export function modelSelection(env: NodeJS.ProcessEnv): ModelSelection {
-  const rawModel = requiredEnv(env, "OPENCODE_MODEL");
-  const providerFromEnv = env.OPENCODE_PROVIDER;
-  if (providerFromEnv) {
-    return { providerID: providerFromEnv, modelID: rawModel };
-  }
-  const separator = rawModel.indexOf("/");
-  if (separator === -1) {
-    fail("OPENCODE_MODEL must be provider/model unless OPENCODE_PROVIDER is set");
-  }
-  return {
-    providerID: rawModel.slice(0, separator),
-    modelID: rawModel.slice(separator + 1),
-  };
-}
-
-export function parseOpenCodeConfig(env: NodeJS.ProcessEnv): {
-  baseUrl?: string;
-  apiKey: string;
-  providerID: string;
-  modelID: string;
-} {
-  return {
-    baseUrl: env.OPENCODE_BASE_URL,
-    apiKey: requiredEnv(env, "OPENCODE_API_KEY"),
-    ...modelSelection(env),
-  };
 }
 
 function opencodeConfig(env: NodeJS.ProcessEnv): Config {
