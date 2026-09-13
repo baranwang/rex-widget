@@ -1,10 +1,10 @@
 import fs from "node:fs";
 import path from "node:path";
-import { providerNames } from "@forward-widget/scraper-kit/provider-metadata";
-import { parseProviderIdStringFor, parseProviderUrl } from "@forward-widget/scraper-kit/provider-url";
-import { type HttpAdapterRequestOptions, initializeFetchAdapter } from "@forward-widget/scraper-kit/runtime";
 import type { Config, OutputFormat } from "@opencode-ai/sdk/v2";
 import { createOpencode } from "@opencode-ai/sdk/v2";
+import { providerNames } from "@rexnow/scraper-kit/provider-metadata";
+import { parseProviderIdStringFor, parseProviderUrl } from "@rexnow/scraper-kit/provider-url";
+import { type HttpAdapterRequestOptions, initializeFetchAdapter } from "@rexnow/scraper-kit/runtime";
 import { z } from "zod";
 import type { CanonicalMapping } from "./schema.ts";
 import { canonicalMappingSchema, episodeRangeSchema } from "./schema.ts";
@@ -482,7 +482,7 @@ export async function fetchTmdbMetadata(fields: IssueFormFields, env: NodeJS.Pro
 export function createChangesetContent(mapping: CanonicalMapping): string {
   return [
     "---",
-    '"@forward-widget/danmu-universe": patch',
+    '"@rexnow/danmu-universal": patch',
     "---",
     "",
     `Add TMDB local mapping for ${mapping.title}.`,

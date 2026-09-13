@@ -150,7 +150,7 @@ jobs:
 
       - name: Build mapping agent workspace dependencies
         if: ${{ steps.gates.outputs.can_proceed == 'true' && steps.idempotency.outputs.already_processed != 'true' }}
-        run: pnpm --filter @forward-widget/scraper-kit... build
+        run: pnpm --filter @rexnow/scraper-kit... build
 
       - name: Run repo-owned mapping agent
         id: mapping_agent
@@ -166,7 +166,7 @@ jobs:
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           SUMMARY_FILE: ${{ runner.temp }}/tmdb-mapping-agent-summary.json
           ISSUE_BODY_FILE: ${{ runner.temp }}/tmdb-mapping-issue-body.md
-        run: pnpm --filter @forward-widget/tmdb-mapping-kit tmdb:mapping-agent -- --issue "$ISSUE_NUMBER" --issue-body-file "$ISSUE_BODY_FILE" --summary-file "$SUMMARY_FILE"
+        run: pnpm --filter @rexnow/tmdb-mapping-kit tmdb:mapping-agent -- --issue "$ISSUE_NUMBER" --issue-body-file "$ISSUE_BODY_FILE" --summary-file "$SUMMARY_FILE"
 
       - name: Evaluate mapping summary
         id: summary

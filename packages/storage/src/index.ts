@@ -1,4 +1,4 @@
-import { safeJsonParse, safeJsonParseWithZod } from "@forward-widget/libs-utils";
+import { safeJsonParse, safeJsonParseWithZod } from "@rexnow/libs-utils";
 import { z } from "zod";
 
 interface SetOptions {

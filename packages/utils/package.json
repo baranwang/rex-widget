@@ -1,5 +1,5 @@
 {
-  "name": "@forward-widget/libs-utils",
+  "name": "@rexnow/libs-utils",
   "version": "0.0.0",
   "type": "module",
   "exports": {

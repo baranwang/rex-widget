@@ -1,5 +1,5 @@
 {
-  "name": "@forward-widget/libs-storage",
+  "name": "@rexnow/libs-storage",
   "version": "0.0.0",
   "type": "module",
   "exports": {
@@ -17,11 +17,11 @@
     "dev": "rslib build --watch"
   },
   "dependencies": {
-    "@forward-widget/libs-utils": "workspace:^",
+    "@rexnow/libs-utils": "workspace:^",
     "zod": "4.0.17"
   },
   "devDependencies": {
-    "@forward-widget/libs": "^2.1.0",
+    "@rexnow/libs": "3.0.0",
     "@rslib/core": "^0.18.2",
     "@types/node": "^24.10.1",
     "typescript": "^5.9.3"

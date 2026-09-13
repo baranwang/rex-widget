@@ -5,5 +5,5 @@ export type {
   HttpAdapterRequestOptions,
   HttpResponse,
   RequestOptions,
-} from "@forward-widget/libs-fetch";
-export { Fetch, initializeFetchAdapter, initializeFetchStorageAdapter } from "@forward-widget/libs-fetch";
+} from "@rexnow/libs-fetch";
+export { Fetch, initializeFetchAdapter, initializeFetchStorageAdapter } from "@rexnow/libs-fetch";
