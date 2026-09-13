@@ -226,4 +226,4 @@ System prompt + host 强制：
 
 ## 7. 建议
 
-按本文实现。下一档是写 implementation plan，然后改 `mapping-agent` 与 workflow。
+按本文实现。实现 plan：`docs/superpowers/plans/2026-09-13-tmdb-mapping-pi-agent-loop.md`。
