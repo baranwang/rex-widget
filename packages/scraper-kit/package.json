@@ -1,5 +1,5 @@
 {
-  "name": "@forward-widget/scraper-kit",
+  "name": "@rexnow/scraper-kit",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -34,8 +34,8 @@
     "test": "rstest"
   },
   "dependencies": {
-    "@forward-widget/libs-fetch": "workspace:^",
-    "@forward-widget/libs-storage": "workspace:^",
+    "@rexnow/libs-fetch": "workspace:^",
+    "@rexnow/libs-storage": "workspace:^",
     "crypto-js": "^4.2.0",
     "date-fns": "^4.1.0",
     "es-toolkit": "^1.39.9",

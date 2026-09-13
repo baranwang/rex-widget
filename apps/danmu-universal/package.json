@@ -1,0 +1,60 @@
+{
+  "name": "@rexnow/danmu-universal",
+  "version": "0.15.8",
+  "type": "module",
+  "main": "./dist/danmu-universal.js",
+  "exports": {
+    ".": "./dist/danmu-universal.js",
+    "./lite": "./dist/danmu-universal.lite.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "NODE_ENV=production rslib build",
+    "dev": "NODE_ENV=development rslib build --watch",
+    "test": "rstest"
+  },
+  "dependencies": {
+    "@rexnow/libs-fetch": "workspace:^",
+    "@rexnow/libs-storage": "workspace:^",
+    "@rexnow/libs-utils": "workspace:^",
+    "@rexnow/scraper-kit": "workspace:^",
+    "@types/querystringify": "^2.0.2",
+    "crypto-js": "^4.2.0",
+    "date-fns": "^4.1.0",
+    "es-toolkit": "^1.39.9",
+    "fast-xml-parser": "^5.2.5",
+    "opencc-js": "^1.0.5",
+    "querystringify": "^2.2.0",
+    "url-parse": "^1.5.10",
+    "zod": "4.0.17"
+  },
+  "devDependencies": {
+    "@rexnow/libs": "3.0.0",
+    "@rexnow/rslib-plugin": "3.0.0",
+    "@rexnow/tmdb-mapping-kit": "workspace:^",
+    "@rsdoctor/rspack-plugin": "^1.2.3",
+    "@rslib/core": "^0.18.2",
+    "@rstest/core": "^0.10.0",
+    "@types/crypto-js": "^4.2.2",
+    "@types/node": "^22.16.0",
+    "@types/opencc-js": "^1.0.3",
+    "@types/url-parse": "^1.4.11",
+    "type-fest": "^4.41.0",
+    "typescript": "^5.9.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/baranwang/rex-widget.git",
+    "directory": "apps/danmu-universal"
+  },
+  "bugs": {
+    "url": "https://github.com/baranwang/rex-widget/issues/new?template=danmu-universal.md"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "license": "MIT"
+}

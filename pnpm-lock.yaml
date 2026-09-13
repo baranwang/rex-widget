@@ -30,18 +30,18 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
-  apps/danmu-universe:
+  apps/danmu-universal:
     dependencies:
-      '@forward-widget/libs-fetch':
+      '@rexnow/libs-fetch':
         specifier: workspace:^
         version: link:../../packages/fetch
-      '@forward-widget/libs-storage':
+      '@rexnow/libs-storage':
         specifier: workspace:^
         version: link:../../packages/storage
-      '@forward-widget/libs-utils':
+      '@rexnow/libs-utils':
         specifier: workspace:^
         version: link:../../packages/utils
-      '@forward-widget/scraper-kit':
+      '@rexnow/scraper-kit':
         specifier: workspace:^
         version: link:../../packages/scraper-kit
       '@types/querystringify':
@@ -55,7 +55,7 @@ importers:
         version: 4.1.0
       es-toolkit:
         specifier: ^1.39.9
-        version: 1.39.9
+        version: 1.52.0
       fast-xml-parser:
         specifier: ^5.2.5
         version: 5.2.5
@@ -72,13 +72,13 @@ importers:
         specifier: 4.0.17
         version: 4.0.17
     devDependencies:
-      '@forward-widget/libs':
-        specifier: 2.1.0
-        version: 2.1.0
-      '@forward-widget/rslib-plugin':
-        specifier: 2.1.0
-        version: 2.1.0
-      '@forward-widget/tmdb-mapping-kit':
+      '@rexnow/libs':
+        specifier: 3.0.0
+        version: 3.0.0
+      '@rexnow/rslib-plugin':
+        specifier: 3.0.0
+        version: 3.0.0
+      '@rexnow/tmdb-mapping-kit':
         specifier: workspace:^
         version: link:../../packages/tmdb-mapping-kit
       '@rsdoctor/rspack-plugin':
@@ -109,33 +109,11 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
-  apps/nsfw:
-    dependencies:
-      es-toolkit:
-        specifier: ^1.39.9
-        version: 1.39.9
-    devDependencies:
-      '@forward-widget/libs':
-        specifier: 2.1.0
-        version: 2.1.0
-      '@forward-widget/rslib-plugin':
-        specifier: 2.1.0
-        version: 2.1.0
-      '@rslib/core':
-        specifier: ^0.18.2
-        version: 0.18.2(typescript@5.9.3)
-      '@types/node':
-        specifier: ^22.16.0
-        version: 22.17.1
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
-
   packages/fetch:
     dependencies:
       es-toolkit:
         specifier: ^1.39.9
-        version: 1.39.9
+        version: 1.52.0
       querystringify:
         specifier: ^2.2.0
         version: 2.2.0
@@ -143,9 +121,9 @@ importers:
         specifier: 4.0.17
         version: 4.0.17
     devDependencies:
-      '@forward-widget/libs':
-        specifier: ^2.1.0
-        version: 2.1.0
+      '@rexnow/libs':
+        specifier: 3.0.0
+        version: 3.0.0
       '@rslib/core':
         specifier: ^0.18.2
         version: 0.18.2(typescript@5.9.3)
@@ -161,10 +139,10 @@ importers:
 
   packages/scraper-kit:
     dependencies:
-      '@forward-widget/libs-fetch':
+      '@rexnow/libs-fetch':
         specifier: workspace:^
         version: link:../fetch
-      '@forward-widget/libs-storage':
+      '@rexnow/libs-storage':
         specifier: workspace:^
         version: link:../storage
       crypto-js:
@@ -175,7 +153,7 @@ importers:
         version: 4.1.0
       es-toolkit:
         specifier: ^1.39.9
-        version: 1.39.9
+        version: 1.52.0
       fast-xml-parser:
         specifier: ^5.2.5
         version: 5.2.5
@@ -222,16 +200,16 @@ importers:
 
   packages/storage:
     dependencies:
-      '@forward-widget/libs-utils':
+      '@rexnow/libs-utils':
         specifier: workspace:^
         version: link:../utils
       zod:
         specifier: 4.0.17
         version: 4.0.17
     devDependencies:
-      '@forward-widget/libs':
-        specifier: ^2.1.0
-        version: 2.1.0
+      '@rexnow/libs':
+        specifier: 3.0.0
+        version: 3.0.0
       '@rslib/core':
         specifier: ^0.18.2
         version: 0.18.2(typescript@5.9.3)
@@ -251,7 +229,7 @@ importers:
         specifier: 4.0.17
         version: 4.0.17
     devDependencies:
-      '@forward-widget/scraper-kit':
+      '@rexnow/scraper-kit':
         specifier: workspace:^
         version: link:../scraper-kit
       '@rslib/core':
@@ -491,15 +469,9 @@ packages:
   '@emnapi/wasi-threads@1.2.1':
     resolution: {integrity: sha512-uTII7OYF+/Mes/MrcIOYp5yOtSMLBWSIoLPpcgwipoiKbli6k322tcoFsxoIIxPDqW01SQGAgko4EzZi2BNv2w==}
 
-  '@forward-widget/libs@2.1.0':
-    resolution: {integrity: sha512-kWRZEh6Nl4RT67bfoBe6KJHDqtO9G9iYGpeIyegNXxBdqRVCMWxGdVGRgEAlK/shbYCLN2WCeJmFToUSshc3KQ==}
-
-  '@forward-widget/rslib-plugin@2.1.0':
-    resolution: {integrity: sha512-yqLHD54RF9iv9PqPr0Zyj7X4MTLENlziy7BbUY8sEjzET4WC+EFieIwN0cRqi1EhBmy8l7h+6aIY9w4w4bkxAw==}
-
-  '@hono/node-server@1.18.2':
-    resolution: {integrity: sha512-icgNvC0vRYivzyuSSaUv9ttcwtN8fDyd1k3AOIBDJgYd84tXRZSS6na8X54CY/oYoFTNhEmZraW/Rb9XYwX4KA==}
-    engines: {node: '>=18.14.1'}
+  '@hono/node-server@2.1.1':
+    resolution: {integrity: sha512-ELuehkj5VCBdgEw9zs+ivkKwyzzUCSQuE96YmiPvn1ECBoZCczbFXJLeEGMTYjphP6gydh4pHMqEYPVMYUVgQg==}
+    engines: {node: '>=20'}
     peerDependencies:
       hono: ^4
 
@@ -621,6 +593,12 @@ packages:
 
   '@polka/url@1.0.0-next.29':
     resolution: {integrity: sha512-wwQAWhWSuHaag8c4q/KN/vCoeOJYshAIvMQwD4GpSb3OiZklFfvAgmj0VCBBImRpuF/aFgIRzllXlVX93Jevww==}
+
+  '@rexnow/libs@3.0.0':
+    resolution: {integrity: sha512-y4+wmV27zpkjTrmsE7VCwI6sSNMCuuOL7CzUTLfvE01DvxMXTGXieVOsfM5/u/XwuMyX+10/x0rvx8IJBLBU1A==}
+
+  '@rexnow/rslib-plugin@3.0.0':
+    resolution: {integrity: sha512-DGJ8VspFL1cLSP412KVqFCIRTb937lGT2X7zMOPGOFxzNST6I/1TK1EclV2tIY2bMKK11u1UXaunDLZKnqkMUA==}
 
   '@rsbuild/core@1.6.9':
     resolution: {integrity: sha512-wf41bbFIzqQsGkrDal2eVC4cxN6II1k4bUo1g7OFuvWeEOJzjoeK4R5xxKM9g5hRjbGAJs6OiQaGpASvUnDrsw==}
@@ -875,8 +853,8 @@ packages:
   '@swc/helpers@0.5.21':
     resolution: {integrity: sha512-jI/VAmtdjB/RnI8GTnokyX7Ug8c+g+ffD6QRLa6XQewtnGyukKkKSk3wLTM3b5cjt1jNh9x0jfVlagdN2gDKQg==}
 
-  '@ts-morph/common@0.27.0':
-    resolution: {integrity: sha512-Wf29UqxWDpc+i61k3oIOzcUfQt79PIT9y/MWfAGlrkjg6lBC1hwDECLXPVJAhWjiGbfBCxZd65F/LIZF3+jeJQ==}
+  '@ts-morph/common@0.29.0':
+    resolution: {integrity: sha512-35oUmphHbJvQ/+UTwFNme/t2p3FoKiGJ5auTjjpNTop2dyREspirjMy82PLSC1pnDJ8ah1GU98hwpVt64YXQsg==}
 
   '@tybys/wasm-util@0.10.1':
     resolution: {integrity: sha512-9tTaPJLSiejZKx+Bmog4uSubteqTvFrVrURwkmHixBo0G4seD0zUxp98E1DzUBJxLQ3NPwXrGKDiVjwx/DpPsg==}
@@ -1058,8 +1036,8 @@ packages:
   cheerio-select@2.1.0:
     resolution: {integrity: sha512-9v9kG0LvzrlcungtnJtpGNxY+fzECQKhK4EGJX2vByejiMX84MFNQw4UxPJl3bFbTMw+Dfs37XaIkCwTZfLh4g==}
 
-  cheerio@1.1.2:
-    resolution: {integrity: sha512-IkxPpb5rS/d1IiLbHMgfPuS0FgiWTtFIm/Nj+2woXDLTZ7fOT2eqzgYbdMlLweqlHbsZjxEChoVK+7iph7jyQg==}
+  cheerio@1.2.0:
+    resolution: {integrity: sha512-WDrybc/gKFpTYQutKIK6UvfcuxijIZfMfXaYm8NMsPQxSYvf+13fXUJ4rztGGbJcBQ/GF55gvrZ0Bc0bj/mqvg==}
     engines: {node: '>=20.18.1'}
 
   ci-info@3.9.0:
@@ -1108,6 +1086,7 @@ packages:
 
   crypto-js@4.2.0:
     resolution: {integrity: sha512-KALDyEYgpY+Rlob/iriUtjV6d5Eq+Y191A5g4UqLAi8CyGP9N1+FdVbkc1SxKc2r4YAYqG8JzO2KGL+AizD70Q==}
+    deprecated: Active development of CryptoJS has been discontinued. This library is no longer maintained.
 
   css-select@5.2.2:
     resolution: {integrity: sha512-TizTzUddG/xYLA3NXodFM0fSbNizXjOKhqiQQwvhlspadZokn1KDy0NZFS0wuEubIYAV5/c1/lAr0TaaFXEXzw==}
@@ -1232,6 +1211,10 @@ packages:
     resolution: {integrity: sha512-aN97NXWF6AWBTahfVOIrB/NShkzi5H7F9r1s9mD3cDj4Ko5f2qhhVoYMibXF7GlLveb/D2ioWay8lxI97Ven3g==}
     engines: {node: '>=0.12'}
 
+  entities@7.0.1:
+    resolution: {integrity: sha512-TWrgLOFUQTH994YUyl1yT4uyavY5nNB5muff+RtWaqNVCAK408b5ZnnbNAUEWLTCpum9w6arT70i1XdQ4UeOPA==}
+    engines: {node: '>=0.12'}
+
   envinfo@7.14.0:
     resolution: {integrity: sha512-CO40UI41xDQzhLB1hWyqUKgFhs250pNcGbyGKe1l/e4FSaI/+YE4IMG76GDt0In67WLPACIITC+sOi08x4wIvg==}
     engines: {node: '>=4'}
@@ -1253,8 +1236,8 @@ packages:
     resolution: {integrity: sha512-j6vWzfrGVfyXxge+O0x5sh6cvxAog0a/4Rdd2K36zCMV5eJ+/+tOAngRO8cODMNWbVRdVlmGZQL2YS3yR8bIUA==}
     engines: {node: '>= 0.4'}
 
-  es-toolkit@1.39.9:
-    resolution: {integrity: sha512-9OtbkZmTA2Qc9groyA1PUNeb6knVTkvB2RSdr/LcJXDL8IdEakaxwXLHXa7VX/Wj0GmdMJPR3WhnPGhiP3E+qg==}
+  es-toolkit@1.52.0:
+    resolution: {integrity: sha512-XTNEJQh1tY1ZJVcf6ayP/2n4ZPyaHlW2FWs7xvw5ddPuhUVjLD3olQVQS7kf58JbAB48iL0uL/jerTrjtV3lDA==}
 
   escalade@3.2.0:
     resolution: {integrity: sha512-WUj2qlxaQtO4g6Pq5c29GTcWGDyd8itL8zTlipgECz3JesAiiOKotd8JU6otB3PACgG6xkJUyVhboMS+bje/jA==}
@@ -1421,12 +1404,15 @@ packages:
     resolution: {integrity: sha512-0hJU9SCPvmMzIBdZFqNPXWa6dqh7WdH0cII9y+CyS8rG3nL48Bclra9HmKhVVUHyPWNH5Y7xDwAB7bfgSjkUMQ==}
     engines: {node: '>= 0.4'}
 
-  hono@4.10.6:
-    resolution: {integrity: sha512-BIdolzGpDO9MQ4nu3AUuDwHZZ+KViNm+EZ75Ae55eMXMqLVhDFqEMXxtUe9Qh8hjL+pIna/frs2j6Y2yD5Ua/g==}
+  hono@4.13.7:
+    resolution: {integrity: sha512-c8/gF9ac8Y78/agExVocyLevgR+JlpNB444Py0FSX8pJoPdYUfUzRcXtYEYGwt6l19qIlVZPN5Mfsw9jFShmQQ==}
     engines: {node: '>=16.9.0'}
 
   htmlparser2@10.0.0:
     resolution: {integrity: sha512-TwAZM+zE5Tq3lrEHvOlvwgj1XLWQCtaaibSN11Q+gGBAS7Y1uZSWwXXRe4iF6OXnaq1riyQAPFOBtYc77Mxq0g==}
+
+  htmlparser2@10.1.0:
+    resolution: {integrity: sha512-VTZkM9GWRAtEpveh7MSF6SjjrpNVNNVJfFup7xTY3UpFtm67foy9HDVXneLtFVt4pMz5kZtgNcvCniNFb1hlEQ==}
 
   http-errors@2.0.0:
     resolution: {integrity: sha512-FtwrG/euBzaEjYeRqOgly7G0qviiXoJWnvEH2Z1plBdXgbyjv34pHTSb9zoeHMyDy33+DWy5Wt9Wo+TURtOYSQ==}
@@ -2035,8 +2021,8 @@ packages:
     resolution: {integrity: sha512-sf4i37nQ2LBx4m3wB74y+ubopq6W/dIzXg0FDGjsYnZHVa1Da8FH853wlL2gtUhg+xJXjfk3kUZS3BRoQeoQBQ==}
     engines: {node: '>=6'}
 
-  ts-morph@26.0.0:
-    resolution: {integrity: sha512-ztMO++owQnz8c/gIENcM9XfCEzgoGphTv+nKpYNM1bgsdOVC/jRZuEBf6N+mLLDNg68Kl+GgUZfOySaRiG1/Ug==}
+  ts-morph@28.0.0:
+    resolution: {integrity: sha512-Wp3tnZ2bzwxyTZMtgWVzXDfm7lB1Drz+y9DmmYH/L702PQhPyVrp3pkou3yIz4qjS14GY9kcpmLiOOMvl8oG1g==}
 
   tslib@2.8.1:
     resolution: {integrity: sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w==}
@@ -2118,8 +2104,8 @@ packages:
   undici-types@7.16.0:
     resolution: {integrity: sha512-Zz+aZWSj8LE6zoxD+xrjh4VfkIG8Ya6LvYkZqtUQGJPZjYl53ypCaUwWqo7eI0x66KBGeRo+mlBEkMSeSZ38Nw==}
 
-  undici@7.14.0:
-    resolution: {integrity: sha512-Vqs8HTzjpQXZeXdpsfChQTlafcMQaaIwnGwLam1wudSSjlJeQ3bw1j+TLPePgrCnCpUXx7Ba5Pdpf5OBih62NQ==}
+  undici@7.29.1:
+    resolution: {integrity: sha512-RYONW2MeafgYlkVOKYKkA/Ag7BmXqgIWCa8t1m0JcxrQg9pI9lEqRhAOruOBCbAohOa/gkCF+iPi9hrgvTzu6Q==}
     engines: {node: '>=20.18.1'}
 
   universalify@0.1.2:
@@ -2455,20 +2441,9 @@ snapshots:
       tslib: 2.8.1
     optional: true
 
-  '@forward-widget/libs@2.1.0':
+  '@hono/node-server@2.1.1(hono@4.13.7)':
     dependencies:
-      cheerio: 1.1.2
-
-  '@forward-widget/rslib-plugin@2.1.0':
-    dependencies:
-      '@hono/node-server': 1.18.2(hono@4.10.6)
-      es-toolkit: 1.39.9
-      hono: 4.10.6
-      ts-morph: 26.0.0
-
-  '@hono/node-server@1.18.2(hono@4.10.6)':
-    dependencies:
-      hono: 4.10.6
+      hono: 4.13.7
 
   '@inquirer/external-editor@1.0.1(@types/node@24.12.4)':
     dependencies:
@@ -2631,6 +2606,17 @@ snapshots:
       config-chain: 1.1.13
 
   '@polka/url@1.0.0-next.29': {}
+
+  '@rexnow/libs@3.0.0':
+    dependencies:
+      cheerio: 1.2.0
+
+  '@rexnow/rslib-plugin@3.0.0':
+    dependencies:
+      '@hono/node-server': 2.1.1(hono@4.13.7)
+      es-toolkit: 1.52.0
+      hono: 4.13.7
+      ts-morph: 28.0.0
 
   '@rsbuild/core@1.6.9':
     dependencies:
@@ -2938,11 +2924,11 @@ snapshots:
     dependencies:
       tslib: 2.8.1
 
-  '@ts-morph/common@0.27.0':
+  '@ts-morph/common@0.29.0':
     dependencies:
-      fast-glob: 3.3.3
       minimatch: 10.0.3
       path-browserify: 1.0.1
+      tinyglobby: 0.2.15
 
   '@tybys/wasm-util@0.10.1':
     dependencies:
@@ -3137,18 +3123,18 @@ snapshots:
       domhandler: 5.0.3
       domutils: 3.2.2
 
-  cheerio@1.1.2:
+  cheerio@1.2.0:
     dependencies:
       cheerio-select: 2.1.0
       dom-serializer: 2.0.0
       domhandler: 5.0.3
       domutils: 3.2.2
       encoding-sniffer: 0.2.1
-      htmlparser2: 10.0.0
+      htmlparser2: 10.1.0
       parse5: 7.3.0
       parse5-htmlparser2-tree-adapter: 7.1.0
       parse5-parser-stream: 7.1.2
-      undici: 7.14.0
+      undici: 7.29.1
       whatwg-mimetype: 4.0.0
 
   ci-info@3.9.0: {}
@@ -3311,6 +3297,8 @@ snapshots:
 
   entities@6.0.1: {}
 
+  entities@7.0.1: {}
+
   envinfo@7.14.0: {}
 
   es-define-property@1.0.1: {}
@@ -3328,7 +3316,7 @@ snapshots:
       has-tostringtag: 1.0.2
       hasown: 2.0.2
 
-  es-toolkit@1.39.9: {}
+  es-toolkit@1.52.0: {}
 
   escalade@3.2.0: {}
 
@@ -3499,7 +3487,7 @@ snapshots:
     dependencies:
       function-bind: 1.1.2
 
-  hono@4.10.6: {}
+  hono@4.13.7: {}
 
   htmlparser2@10.0.0:
     dependencies:
@@ -3507,6 +3495,13 @@ snapshots:
       domhandler: 5.0.3
       domutils: 3.2.2
       entities: 6.0.1
+
+  htmlparser2@10.1.0:
+    dependencies:
+      domelementtype: 2.3.0
+      domhandler: 5.0.3
+      domutils: 3.2.2
+      entities: 7.0.1
 
   http-errors@2.0.0:
     dependencies:
@@ -4052,9 +4047,9 @@ snapshots:
 
   totalist@3.0.1: {}
 
-  ts-morph@26.0.0:
+  ts-morph@28.0.0:
     dependencies:
-      '@ts-morph/common': 0.27.0
+      '@ts-morph/common': 0.29.0
       code-block-writer: 13.0.3
 
   tslib@2.8.1: {}
@@ -4113,7 +4108,7 @@ snapshots:
 
   undici-types@7.16.0: {}
 
-  undici@7.14.0: {}
+  undici@7.29.1: {}
 
   universalify@0.1.2: {}
 

@@ -115,7 +115,7 @@ export class Fetch {
 
   private static getAdapter() {
     if (!Fetch.adapter) {
-      throw new Error("@forward-widget/libs-fetch: fetch adapter has not been initialized");
+      throw new Error("@rexnow/libs-fetch: fetch adapter has not been initialized");
     }
     return Fetch.adapter;
   }

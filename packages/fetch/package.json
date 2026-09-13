@@ -1,5 +1,5 @@
 {
-  "name": "@forward-widget/libs-fetch",
+  "name": "@rexnow/libs-fetch",
   "version": "0.0.0",
   "type": "module",
   "exports": {
@@ -22,7 +22,7 @@
     "zod": "4.0.17"
   },
   "devDependencies": {
-    "@forward-widget/libs": "^2.1.0",
+    "@rexnow/libs": "3.0.0",
     "@rslib/core": "^0.18.2",
     "@types/node": "^24.10.1",
     "@types/querystringify": "^2.0.2",

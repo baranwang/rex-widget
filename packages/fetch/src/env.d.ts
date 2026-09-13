@@ -1,1 +1,1 @@
-/// <reference types='@forward-widget/libs/env' />
+/// <reference types='@rexnow/libs/env' />

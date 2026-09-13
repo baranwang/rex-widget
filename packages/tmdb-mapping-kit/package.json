@@ -1,5 +1,5 @@
 {
-  "name": "@forward-widget/tmdb-mapping-kit",
+  "name": "@rexnow/tmdb-mapping-kit",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -29,7 +29,7 @@
     "@rslib/core": "^0.21.5",
     "@rstest/adapter-rslib": "^0.2.2",
     "@rstest/core": "^0.9.10",
-    "@forward-widget/scraper-kit": "workspace:^",
+    "@rexnow/scraper-kit": "workspace:^",
     "@types/node": "^24.12.4",
     "rsbuild-plugin-protobufjs": "^0.1.0",
     "typescript": "^6.0.3"

@@ -517,7 +517,7 @@ describe("write safety helpers", () => {
   });
 
   test("creates a changeset for affected packages", () => {
-    expect(createChangesetContent(mapping)).toContain('"@forward-widget/danmu-universe": patch');
+    expect(createChangesetContent(mapping)).toContain('"@rexnow/danmu-universal": patch');
   });
 
   test("writes summary json when path is provided", () => {
@@ -656,7 +656,7 @@ describe("cli safe failure summary", () => {
   });
 
   test("uses GitHub workspace as CLI repo root when pnpm runs from package cwd", () => {
-    expect(defaultRepoRoot({ GITHUB_WORKSPACE: "/tmp/forward-widget" })).toBe("/tmp/forward-widget");
+    expect(defaultRepoRoot({ GITHUB_WORKSPACE: "/tmp/rex-widget" })).toBe("/tmp/rex-widget");
   });
 });
 

@@ -16,7 +16,7 @@
   },
   "linter": {
     "enabled": true,
-    "includes": ["**/src/**", "**/app/**", "!**/forward-widget-env.d.ts"],
+    "includes": ["**/src/**", "**/app/**", "!**/rex-widget-env.d.ts"],
     "rules": {
       "recommended": true,
       "nursery": {

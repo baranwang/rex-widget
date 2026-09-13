@@ -1,7 +1,7 @@
-import { providerNames } from "@forward-widget/scraper-kit/provider-metadata";
+import { providerNames } from "@rexnow/scraper-kit/provider-metadata";
 import { z } from "zod";
 
-export const providerEnumSchema = z.enum(providerNames).describe("Known Forward Widget provider name.");
+export const providerEnumSchema = z.enum(providerNames).describe("Known Rex Widget provider name.");
 
 const tmdbIdSchema = z.number().int().nonnegative().describe("TMDB numeric identifier for this mapping file.");
 
