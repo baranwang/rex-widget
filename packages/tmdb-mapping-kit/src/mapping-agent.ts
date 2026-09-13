@@ -1,16 +1,19 @@
 import fs from "node:fs";
 import path from "node:path";
-import type { Config, OutputFormat } from "@opencode-ai/sdk/v2";
-import { createOpencode } from "@opencode-ai/sdk/v2";
 import { providerNames } from "@rexnow/scraper-kit/provider-metadata";
-import { parseProviderUrl } from "@rexnow/scraper-kit/provider-url";
 import { type HttpAdapterRequestOptions, initializeFetchAdapter } from "@rexnow/scraper-kit/runtime";
 import { z } from "zod";
 import {
+  type MappingSessionFactory,
+  restoreMappingWorkspace,
+  runPiMappingSession,
+  snapshotMappingWorkspace,
+} from "./mapping-agent-session.ts";
+import {
   type MappingCandidate,
-  type MappingCandidateProvider,
   mappingCandidateSchema,
   modelResponseSchema,
+  type SubmitMapping,
 } from "./mapping-agent-tools/submit.ts";
 import type { CanonicalMapping } from "./schema.ts";
 import { canonicalMappingSchema } from "./schema.ts";
@@ -57,6 +60,7 @@ export type MappingAgentOptions = {
   repoRoot?: string;
   env?: NodeJS.ProcessEnv;
   summaryPath?: string;
+  createSession?: MappingSessionFactory;
 };
 
 export type MappingAgentSummary = {
@@ -75,8 +79,6 @@ const mappingAgentRequestTimeoutMs = 120_000;
 function mappingAgentRequestSignal(): AbortSignal {
   return AbortSignal.timeout(mappingAgentRequestTimeoutMs);
 }
-
-import { modelSelection } from "./mapping-agent-env.ts";
 
 export { mappingModelSelection, modelSelection } from "./mapping-agent-env.ts";
 
@@ -171,13 +173,6 @@ function fail(message: string): never {
 
 class AmbiguousMappingError extends Error {}
 
-function applyIssueFieldDefaults(fields: IssueFormFields): IssueFormFields {
-  if (fields.media_type !== "tv" || typeof fields.season === "number") {
-    return fields;
-  }
-  return { ...fields, season: 1 };
-}
-
 function requiredEnv(env: NodeJS.ProcessEnv, name: string): string {
   const value = env[name];
   if (!value) {
@@ -209,59 +204,6 @@ function parseTmdbUrl(value: string): { mediaType: "movie" | "tv"; tmdbId: numbe
 
 export function parseIssueFieldsStructuredResponse(value: unknown): IssueFormFields {
   return issueFormFieldsSchema.parse(value);
-}
-
-export async function extractIssueFields(
-  issueBody: string,
-  repoRoot: string,
-  env: NodeJS.ProcessEnv,
-): Promise<IssueFormFields> {
-  const selection = modelSelection(env);
-  const { client, server } = await loggedStep(
-    "opencode create client for issue field extraction",
-    () => createOpencode({ config: opencodeConfig(env), timeout: 120_000 }),
-    { provider: selection.providerID, model: selection.modelID },
-  );
-  try {
-    const session = sdkData(
-      await loggedStep("opencode create session for issue field extraction", () =>
-        client.session.create({ directory: repoRoot, title: "TMDB platform mapping agent" }),
-      ),
-    );
-    const format: OutputFormat = {
-      type: "json_schema",
-      schema: issueFormFieldsOutputJsonSchema,
-      retryCount: 2,
-    };
-    const response = sdkData(
-      await loggedStep("opencode prompt for issue field extraction", () =>
-        client.session.prompt({
-          sessionID: session.id,
-          directory: repoRoot,
-          model: selection,
-          agent: "build",
-          tools: {},
-          format,
-          parts: [{ type: "text", text: buildIssueFieldsPrompt(issueBody) }],
-        }),
-      ),
-    );
-    const structuredResponse = response.info?.structured;
-    if (structuredResponse === undefined) {
-      fail("OpenCode SDK response did not include structured output");
-    }
-    const fields = parseIssueFieldsStructuredResponse(structuredResponse);
-    mappingAgentLog("issue field extraction parsed", {
-      mediaType: fields.media_type,
-      tmdbUrl: fields.tmdb_url,
-      season: fields.season ?? null,
-      platformUrlCount: fields.platform_urls.length,
-    });
-    return fields;
-  } finally {
-    server.close();
-    mappingAgentLog("opencode server closed after issue field extraction");
-  }
 }
 
 export function toCanonicalMapping(candidate: MappingCandidate): CanonicalMapping {
@@ -316,57 +258,6 @@ export function buildIssueFieldsPrompt(issueBody: string): string {
     "Issue body:",
     issueBody,
   ].join("\n\n");
-}
-
-const deterministicProviders = new Set(providerNames);
-
-async function resolvePlatformProviders(platformUrls: string[]): Promise<MappingCandidateProvider[] | null> {
-  const providers: MappingCandidateProvider[] = [];
-  for (const platformUrl of platformUrls) {
-    const parsed = await loggedStep("parse provider URL", () => parseProviderUrl(platformUrl), { url: platformUrl });
-    if (parsed) {
-      if (!deterministicProviders.has(parsed.provider)) {
-        mappingAgentLog("provider URL resolved to unsupported provider", {
-          provider: parsed.provider,
-          url: platformUrl,
-        });
-        return null;
-      }
-      mappingAgentLog("provider URL resolved", { provider: parsed.provider, idString: parsed.idString });
-      providers.push({
-        provider: parsed.provider,
-        idString: parsed.idString,
-        url: parsed.url,
-      });
-      continue;
-    }
-    mappingAgentLog("provider URL unresolved; falling back to OpenCode mapping candidate generation", {
-      url: platformUrl,
-    });
-    return null;
-  }
-  return providers;
-}
-
-function createResolvedCandidate(
-  fields: IssueFormFields,
-  metadata: TmdbMetadata,
-  providers: MappingCandidateProvider[],
-): MappingCandidate {
-  const { tmdbId } = parseTmdbUrl(fields.tmdb_url);
-  const base = {
-    tmdbId,
-    title: metadata.title,
-  };
-  if (fields.media_type === "movie") {
-    return { type: "movie", ...base, providers };
-  }
-  const season = fields.season ?? 1;
-  return {
-    type: "tv",
-    ...base,
-    providers: providers.map(({ provider, idString, url }) => ({ provider, idString, url, season, epOffset: 0 })),
-  };
 }
 
 export async function fetchTmdbMetadata(fields: IssueFormFields, env: NodeJS.ProcessEnv): Promise<TmdbMetadata> {
@@ -574,93 +465,10 @@ export function writeMappingAgentSummary(summaryPath: string | undefined, summar
   fs.writeFileSync(summaryPath, `${JSON.stringify(summary, null, 2)}\n`);
 }
 
-function opencodeConfig(env: NodeJS.ProcessEnv): Config {
-  const selection = modelSelection(env);
-  const apiKey = requiredEnv(env, "OPENCODE_API_KEY");
-  const baseURL = env.OPENCODE_BASE_URL;
-  return {
-    model: `${selection.providerID}/${selection.modelID}`,
-    provider: {
-      [selection.providerID]: {
-        options: {
-          apiKey,
-          ...(baseURL ? { baseURL } : {}),
-        },
-      },
-    },
-  };
-}
-
-function sdkData<T>(result: { data?: T; error?: unknown }): T {
-  if (result.error) {
-    throw result.error;
-  }
-  if (result.data === undefined) {
-    fail("OpenCode SDK response did not include data");
-  }
-  return result.data;
-}
-
 export function parseStructuredModelResponse(value: unknown): z.infer<typeof modelResponseSchema> {
   return modelResponseSchema.parse(value);
 }
 
-async function generateCandidate(
-  fields: IssueFormFields,
-  metadata: TmdbMetadata,
-  repoRoot: string,
-  env: NodeJS.ProcessEnv,
-): Promise<MappingCandidate> {
-  const selection = modelSelection(env);
-  const { client, server } = await loggedStep(
-    "opencode create client for mapping candidate generation",
-    () => createOpencode({ config: opencodeConfig(env), timeout: 120_000 }),
-    { provider: selection.providerID, model: selection.modelID },
-  );
-  try {
-    const session = sdkData(
-      await loggedStep("opencode create session for mapping candidate generation", () =>
-        client.session.create({ directory: repoRoot, title: "TMDB platform mapping agent" }),
-      ),
-    );
-    const format: OutputFormat = {
-      type: "json_schema",
-      schema: mappingAgentOutputJsonSchema,
-      retryCount: 2,
-    };
-    const response = sdkData(
-      await loggedStep("opencode prompt for mapping candidate generation", () =>
-        client.session.prompt({
-          sessionID: session.id,
-          directory: repoRoot,
-          model: selection,
-          agent: "build",
-          tools: {},
-          format,
-          parts: [{ type: "text", text: buildMappingPrompt(fields, metadata) }],
-        }),
-      ),
-    );
-    const structuredResponse = response.info?.structured;
-    if (structuredResponse === undefined) {
-      fail("OpenCode SDK response did not include structured output");
-    }
-    const modelResponse = parseStructuredModelResponse(structuredResponse);
-    if (modelResponse.status === "ambiguous") {
-      mappingAgentLog("mapping candidate generation returned ambiguous", { reason: modelResponse.reason });
-      throw new AmbiguousMappingError(modelResponse.reason);
-    }
-    mappingAgentLog("mapping candidate generated", {
-      type: modelResponse.mapping.type,
-      tmdbId: modelResponse.mapping.tmdbId,
-      providerCount: modelResponse.mapping.providers.length,
-    });
-    return modelResponse.mapping;
-  } finally {
-    server.close();
-    mappingAgentLog("opencode server closed after mapping candidate generation");
-  }
-}
 export async function runMappingAgent(options: MappingAgentOptions): Promise<MappingAgentSummary> {
   const repoRoot = options.repoRoot ?? process.cwd();
   const env = options.env ?? process.env;
@@ -670,26 +478,32 @@ export async function runMappingAgent(options: MappingAgentOptions): Promise<Map
     repoRoot,
     summaryPath: options.summaryPath ?? null,
   });
+  const snapshot = snapshotMappingWorkspace(repoRoot);
   try {
-    const fields = applyIssueFieldDefaults(await extractIssueFields(options.issueBody, repoRoot, env));
-    mappingAgentLog("issue field defaults applied", {
-      mediaType: fields.media_type,
-      tmdbUrl: fields.tmdb_url,
-      season: fields.season ?? null,
-      platformUrlCount: fields.platform_urls.length,
-    });
-    const metadata = await fetchTmdbMetadata(fields, env);
-    const resolvedProviders = await loggedStep("resolve platform providers", () =>
-      resolvePlatformProviders(fields.platform_urls),
-    );
-    const candidate = resolvedProviders
-      ? createResolvedCandidate(fields, metadata, resolvedProviders)
-      : await generateCandidate(fields, metadata, repoRoot, env);
-    mappingAgentLog("mapping candidate selected", {
-      source: resolvedProviders ? "deterministic-provider-url" : "opencode",
-      providerCount: candidate.providers.length,
-    });
-    const mapping = toCanonicalMapping(candidate);
+    const toolLog: string[] = [];
+    let submitted: SubmitMapping;
+    try {
+      submitted = await runPiMappingSession({
+        issueNumber: options.issueNumber,
+        issueBody: options.issueBody,
+        repoRoot,
+        env,
+        createSession: options.createSession,
+        toolLog,
+      });
+    } finally {
+      restoreMappingWorkspace(repoRoot, snapshot);
+    }
+    if (submitted.status === "ambiguous") {
+      throw new AmbiguousMappingError(submitted.reason);
+    }
+    if (!toolLog.includes("get_tmdb")) {
+      throw new Error("get_tmdb is required before a confident submit");
+    }
+    if (!toolLog.includes("probe_mapping") && !toolLog.includes("list_episodes")) {
+      throw new Error("probe_mapping or list_episodes is required before a confident submit");
+    }
+    const mapping = toCanonicalMapping(submitted.mapping);
     mappingAgentLog("canonical mapping created", {
       type: mapping.type,
       tmdbId: mapping.tmdbId,
@@ -705,7 +519,6 @@ export async function runMappingAgent(options: MappingAgentOptions): Promise<Map
       status: "success",
       issueNumber: options.issueNumber,
       mappingTitle: mapping.title,
-      mappingYear: metadata.year,
       changedFiles: summaryChangedFiles(options.issueNumber, mapping, artifacts),
       message: artifacts.changed
         ? `TMDB mapping artifacts written for ${mapping.title}`
