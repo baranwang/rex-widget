@@ -3,94 +3,20 @@ import path from "node:path";
 import type { Config, OutputFormat } from "@opencode-ai/sdk/v2";
 import { createOpencode } from "@opencode-ai/sdk/v2";
 import { providerNames } from "@rexnow/scraper-kit/provider-metadata";
-import { parseProviderIdStringFor, parseProviderUrl } from "@rexnow/scraper-kit/provider-url";
+import { parseProviderUrl } from "@rexnow/scraper-kit/provider-url";
 import { type HttpAdapterRequestOptions, initializeFetchAdapter } from "@rexnow/scraper-kit/runtime";
 import { z } from "zod";
+import {
+  type MappingCandidate,
+  type MappingCandidateProvider,
+  mappingCandidateSchema,
+  modelResponseSchema,
+} from "./mapping-agent-tools/submit.ts";
 import type { CanonicalMapping } from "./schema.ts";
-import { canonicalMappingSchema, episodeRangeSchema } from "./schema.ts";
+import { canonicalMappingSchema } from "./schema.ts";
 
-const providerEnumSchema = z.enum(providerNames);
-
-const mappingCandidateBaseProviderFields = {
-  provider: providerEnumSchema,
-  idString: z.string(),
-  url: z.string().optional(),
-};
-
-function hasValidProviderIdString(provider: (typeof providerNames)[number], idString: string): boolean {
-  try {
-    parseProviderIdStringFor(provider, idString);
-    return true;
-  } catch (error) {
-    void error;
-    return false;
-  }
-}
-
-function validateProviderIdString(
-  provider: { provider: (typeof providerNames)[number]; idString: string },
-  ctx: z.RefinementCtx,
-): void {
-  if (hasValidProviderIdString(provider.provider, provider.idString)) {
-    return;
-  }
-  ctx.addIssue({
-    code: "custom",
-    path: ["idString"],
-    message: "idString must be valid for the selected provider",
-  });
-}
-
-const mappingCandidateMovieProviderSchema = z
-  .object(mappingCandidateBaseProviderFields)
-  .strict()
-  .superRefine(validateProviderIdString);
-
-const mappingCandidateTvProviderSchema = z
-  .object(mappingCandidateBaseProviderFields)
-  .extend({
-    season: z.number().int().nonnegative(),
-    epRange: episodeRangeSchema.optional(),
-    epOffset: z.number().int().default(0),
-  })
-  .strict()
-  .superRefine(validateProviderIdString);
-
-const mappingCandidateSchema = z.discriminatedUnion("type", [
-  z
-    .object({
-      type: z.literal("movie"),
-      tmdbId: z.number().int().nonnegative(),
-      title: z.string().min(1),
-      providers: z.array(mappingCandidateMovieProviderSchema),
-    })
-    .strict(),
-  z
-    .object({
-      type: z.literal("tv"),
-      tmdbId: z.number().int().nonnegative(),
-      title: z.string().min(1),
-      providers: z.array(mappingCandidateTvProviderSchema),
-    })
-    .strict(),
-]);
-
-export type MappingCandidateProvider = z.output<
-  typeof mappingCandidateMovieProviderSchema | typeof mappingCandidateTvProviderSchema
->;
-export type MappingCandidate = z.output<typeof mappingCandidateSchema>;
-
-export const modelResponseSchema = z.discriminatedUnion("status", [
-  z.object({
-    status: z.literal("confident"),
-    mapping: mappingCandidateSchema,
-    reason: z.string().optional(),
-  }),
-  z.object({
-    status: z.literal("ambiguous"),
-    reason: z.string().min(1),
-  }),
-]);
+export type { MappingCandidate, MappingCandidateProvider } from "./mapping-agent-tools/submit.ts";
+export { mappingCandidateSchema, modelResponseSchema } from "./mapping-agent-tools/submit.ts";
 
 export const modelResponseOutputSchema = z.object({
   status: z.enum(["confident", "ambiguous"]),
