@@ -40,6 +40,20 @@ describe("searchCatalog", () => {
     expect(urls.some((url) => url.includes("api.so.360kan.com"))).toBe(false);
   });
 
+  test("360 fetch uses a timeout signal and treats abort as empty platforms", async () => {
+    const fetchImpl: typeof fetch = async (_input, init) => {
+      expect(init?.signal).toBeInstanceOf(AbortSignal);
+      throw new DOMException("The operation was aborted.", "TimeoutError");
+    };
+    const result = await searchCatalog(
+      { query: "将夜", type: "tv", scope: "platforms" },
+      { TMDB_ACCESS_TOKEN: "token" },
+      fetchImpl,
+    );
+    expect(result.tmdb).toEqual([]);
+    expect(result.platforms).toEqual([]);
+  });
+
   test("scope platforms returns empty tmdb", async () => {
     const fetchImpl: typeof fetch = async (input) => {
       const url = String(input);

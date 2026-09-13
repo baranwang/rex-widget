@@ -85,8 +85,8 @@ export function createMappingTools(options: {
       season: Type.Optional(Type.Number({ description: "TMDB season number for episode list" })),
     }),
     async execute(_toolCallId, params) {
-      onTool("get_tmdb");
       const result = await getTmdb(params, env);
+      onTool("get_tmdb");
       return toolResult(result);
     },
   });
@@ -161,8 +161,10 @@ export function createMappingTools(options: {
       airDate: Type.Optional(Type.String()),
     }),
     async execute(_toolCallId, params) {
-      onTool("list_episodes");
       const result = await listEpisodesTool(params);
+      if (result.ok === true) {
+        onTool("list_episodes");
+      }
       return toolResult(result);
     },
   });
@@ -205,8 +207,10 @@ export function createMappingTools(options: {
       sampleEpisode: Type.Optional(Type.Number()),
     }),
     async execute(_toolCallId, params) {
-      onTool("probe_mapping");
       const result = await probeMapping(repoRoot, params.mapping as CanonicalMapping, params.sampleEpisode);
+      if (result.some((item) => item.ok)) {
+        onTool("probe_mapping");
+      }
       return toolResult(result);
     },
   });

@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { describe, expect, test } from "@rstest/core";
+import { beforeEach, describe, expect, rs, test } from "@rstest/core";
 import {
   createChangesetContent,
   createMappingFileContent,
@@ -20,6 +20,19 @@ import {
 } from "./mapping-agent.ts";
 import type { MappingSessionFactory } from "./mapping-agent-session.ts";
 
+rs.mock("./mapping-agent-tools/provider.ts", async () => {
+  const actual = await rs.importActual<typeof import("./mapping-agent-tools/provider.ts")>(
+    "./mapping-agent-tools/provider.ts",
+  );
+  return {
+    ...actual,
+    listEpisodesTool: rs.fn(async () => ({
+      ok: true,
+      episodes: [{ episodeNumber: 1, episodeName: "e1" }],
+    })),
+  };
+});
+
 type CustomTools = Parameters<MappingSessionFactory>[0]["customTools"];
 
 const jiangyeMapping = {
@@ -28,6 +41,15 @@ const jiangyeMapping = {
   title: "将夜",
   providers: [{ season: 1, provider: "bilibili" as const, idString: "seasonId=45962", epOffset: 0 }],
 };
+
+beforeEach(async () => {
+  const { listEpisodesTool } = await import("./mapping-agent-tools/provider.ts");
+  rs.mocked(listEpisodesTool).mockReset();
+  rs.mocked(listEpisodesTool).mockResolvedValue({
+    ok: true,
+    episodes: [{ episodeNumber: 1, episodeName: "e1" }],
+  });
+});
 
 const sessionEnv = {
   PI_API_KEY: "test-api-key",
@@ -506,6 +528,7 @@ https://example.com/watch/unknown-provider
       status: "success",
       issueNumber: 42,
       mappingTitle: "Mismatched Candidate",
+      mappingYear: 2025,
       changedFiles: [mappingDataRelativePath(mapping), ".changeset/tmdb-mapping-issue-42.md"],
       message: "TMDB mapping artifacts written for Mismatched Candidate",
     });
@@ -576,6 +599,7 @@ https://www.bilibili.com/bangumi/play/ep3409878
       status: "success",
       issueNumber: 2,
       mappingTitle: "将夜",
+      mappingYear: 2018,
     });
 
     const json = JSON.parse(fs.readFileSync(dataPath, "utf8"));
@@ -636,6 +660,7 @@ https://www.bilibili.com/bangumi/play/ss45962
       status: "success",
       issueNumber: 7,
       mappingTitle: "将夜",
+      mappingYear: 2018,
     });
 
     const seasonJson = JSON.parse(fs.readFileSync(dataPath, "utf8"));
@@ -737,5 +762,74 @@ https://www.mgtv.com/h/860862.html
     );
 
     expect(fs.existsSync(strayPath)).toBe(false);
+  });
+
+  test("rejects confident submit after get_tmdb throws", async () => {
+    const fetchImpl: typeof fetch = async () => {
+      throw new Error("TMDB down");
+    };
+
+    const summary = await withMockedFetch(fetchImpl, () =>
+      runMappingAgent({
+        issueNumber: 42,
+        issueBody: "https://www.themoviedb.org/tv/282136",
+        repoRoot: fs.mkdtempSync(path.join(os.tmpdir(), "tmdb-mapping-run-")),
+        env: sessionEnv,
+        createSession: createFakeSession(async (customTools) => {
+          await requireTool(customTools, "get_tmdb")
+            .execute("get-tmdb", { tmdbId: 282136, type: "tv" })
+            .catch(() => undefined);
+          await requireTool(customTools, "submit_mapping").execute("submit", {
+            status: "confident",
+            mapping: jiangyeMapping,
+          });
+        }),
+      }),
+    );
+
+    expect(summary).toMatchObject({
+      status: "error",
+      message: "get_tmdb is required before a confident submit",
+    });
+  });
+
+  test("rejects confident submit when get_tmdb succeeds but probe and list_episodes fail", async () => {
+    const { listEpisodesTool } = await import("./mapping-agent-tools/provider.ts");
+    rs.mocked(listEpisodesTool).mockResolvedValue({ ok: false, error: "scrape failed" });
+
+    const fetchImpl: typeof fetch = async () =>
+      ({
+        ok: true,
+        json: async () => ({ name: "将夜", first_air_date: "2018-10-31" }),
+      }) as Response;
+
+    const summary = await withMockedFetch(fetchImpl, () =>
+      runMappingAgent({
+        issueNumber: 42,
+        issueBody: "https://www.themoviedb.org/tv/282136",
+        repoRoot: fs.mkdtempSync(path.join(os.tmpdir(), "tmdb-mapping-run-")),
+        env: sessionEnv,
+        createSession: createFakeSession(async (customTools) => {
+          await requireTool(customTools, "get_tmdb").execute("get-tmdb", {
+            tmdbId: jiangyeMapping.tmdbId,
+            type: jiangyeMapping.type,
+          });
+          await requireTool(customTools, "probe_mapping").execute("probe", { mapping: jiangyeMapping });
+          await requireTool(customTools, "list_episodes").execute("list", {
+            provider: "bilibili",
+            idString: "seasonId=45962",
+          });
+          await requireTool(customTools, "submit_mapping").execute("submit", {
+            status: "confident",
+            mapping: jiangyeMapping,
+          });
+        }),
+      }),
+    );
+
+    expect(summary).toMatchObject({
+      status: "error",
+      message: "probe_mapping or list_episodes is required before a confident submit",
+    });
   });
 });

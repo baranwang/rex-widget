@@ -133,85 +133,89 @@ function parseRow(row: unknown): { cat_id: string; titleTxt: string; playlinks: 
 }
 
 async function parseSitePlaylink(site: string, url: string): Promise<PlatformHit | undefined> {
-  const provider = SITE_PROVIDER_MAP[site];
-  if (!provider) {
+  try {
+    const provider = SITE_PROVIDER_MAP[site];
+    if (!provider) {
+      return undefined;
+    }
+
+    if (site === "qq") {
+      const qqId = parseQihooTencentUrl(url);
+      if (!qqId?.cid) {
+        return undefined;
+      }
+      return {
+        provider,
+        idString: generateProviderIdString("tencent", { cid: qqId.cid }),
+        source: "360kan",
+      };
+    }
+
+    if (site === "youku") {
+      const youkuId = parseQihooYoukuUrl(url);
+      if (!youkuId?.showId) {
+        return undefined;
+      }
+      return {
+        provider,
+        idString: generateProviderIdString("youku", { showId: youkuId.showId }),
+        source: "360kan",
+      };
+    }
+
+    if (site === "imgo") {
+      const mgtvId = parseQihooMgtvUrl(url);
+      if (!mgtvId?.dramaId) {
+        return undefined;
+      }
+      return {
+        provider,
+        idString: generateProviderIdString("mgtv", { dramaId: mgtvId.dramaId }),
+        source: "360kan",
+      };
+    }
+
+    if (site === "bilibili1") {
+      let parsedUrl: URL;
+      try {
+        parsedUrl = new URL(url);
+      } catch {
+        return undefined;
+      }
+      if (/^\/bangumi\/play\/ep\d+/.test(parsedUrl.pathname)) {
+        return undefined;
+      }
+      const parsed = await parseProviderUrl(url);
+      const seasonId =
+        parsed?.provider === "bilibili" && parsed.id && "seasonId" in parsed.id ? parsed.id.seasonId : undefined;
+      if (!seasonId) {
+        return undefined;
+      }
+      return {
+        provider,
+        idString: generateProviderIdString("bilibili", { seasonId }),
+        source: "360kan",
+      };
+    }
+
+    if (site === "qiyi") {
+      const parsed = await parseProviderUrl(url);
+      const entityId =
+        parsed?.provider === "iqiyi" && parsed.id && "entityId" in parsed.id ? parsed.id.entityId : undefined;
+      if (!entityId) {
+        return undefined;
+      }
+      return {
+        provider,
+        idString: generateProviderIdString("iqiyi", { entityId }),
+        source: "360kan",
+      };
+    }
+
+    return undefined;
+  } catch {
     return undefined;
   }
-
-  if (site === "qq") {
-    const qqId = parseQihooTencentUrl(url);
-    if (!qqId?.cid) {
-      return undefined;
-    }
-    return {
-      provider,
-      idString: generateProviderIdString("tencent", { cid: qqId.cid }),
-      source: "360kan",
-    };
-  }
-
-  if (site === "youku") {
-    const youkuId = parseQihooYoukuUrl(url);
-    if (!youkuId?.showId) {
-      return undefined;
-    }
-    return {
-      provider,
-      idString: generateProviderIdString("youku", { showId: youkuId.showId }),
-      source: "360kan",
-    };
-  }
-
-  if (site === "imgo") {
-    const mgtvId = parseQihooMgtvUrl(url);
-    if (!mgtvId?.dramaId) {
-      return undefined;
-    }
-    return {
-      provider,
-      idString: generateProviderIdString("mgtv", { dramaId: mgtvId.dramaId }),
-      source: "360kan",
-    };
-  }
-
-  if (site === "bilibili1") {
-    let parsedUrl: URL;
-    try {
-      parsedUrl = new URL(url);
-    } catch {
-      return undefined;
-    }
-    if (/^\/bangumi\/play\/ep\d+/.test(parsedUrl.pathname)) {
-      return undefined;
-    }
-    const parsed = await parseProviderUrl(url);
-    const seasonId =
-      parsed?.provider === "bilibili" && parsed.id && "seasonId" in parsed.id ? parsed.id.seasonId : undefined;
-    if (!seasonId) {
-      return undefined;
-    }
-    return {
-      provider,
-      idString: generateProviderIdString("bilibili", { seasonId }),
-      source: "360kan",
-    };
-  }
-
-  if (site === "qiyi") {
-    const parsed = await parseProviderUrl(url);
-    const entityId =
-      parsed?.provider === "iqiyi" && parsed.id && "entityId" in parsed.id ? parsed.id.entityId : undefined;
-    if (!entityId) {
-      return undefined;
-    }
-    return {
-      provider,
-      idString: generateProviderIdString("iqiyi", { entityId }),
-      source: "360kan",
-    };
-  }
-
-  return undefined;
 }
 
 export async function platformsFrom360Rows(rows: unknown[], input: SearchInput): Promise<SearchOutput["platforms"]> {

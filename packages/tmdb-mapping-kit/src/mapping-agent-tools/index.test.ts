@@ -71,6 +71,54 @@ describe("createMappingTools", () => {
     expect(calls).toEqual(["parse_episode_title"]);
   });
 
+  test("does not record get_tmdb when getTmdb throws", async () => {
+    const calls: string[] = [];
+    const tools = createMappingTools({
+      env: {},
+      repoRoot: "/tmp",
+      onTool: (name) => calls.push(name),
+      onSubmit: () => {},
+    });
+    const getTmdbTool = tools.find((tool) => tool.name === "get_tmdb");
+    await expect(getTmdbTool?.execute("1", { tmdbId: 1, type: "movie" })).rejects.toThrow(
+      "TMDB_ACCESS_TOKEN is required",
+    );
+    expect(calls).toEqual([]);
+  });
+
+  test("does not record list_episodes when the result is not ok", async () => {
+    const calls: string[] = [];
+    const tools = createMappingTools({
+      env: {},
+      repoRoot: "/tmp",
+      onTool: (name) => calls.push(name),
+      onSubmit: () => {},
+    });
+    const listEpisodes = tools.find((tool) => tool.name === "list_episodes");
+    await listEpisodes?.execute("1", { provider: "unknown", idString: "x" });
+    expect(calls).toEqual([]);
+  });
+
+  test("does not record probe_mapping when every probe item fails", async () => {
+    const calls: string[] = [];
+    const tools = createMappingTools({
+      env: {},
+      repoRoot: "/tmp",
+      onTool: (name) => calls.push(name),
+      onSubmit: () => {},
+    });
+    const probeMappingTool = tools.find((tool) => tool.name === "probe_mapping");
+    await probeMappingTool?.execute("1", {
+      mapping: {
+        type: "movie",
+        tmdbId: 1,
+        title: "Demo",
+        providers: [{ provider: "unknown", idString: "x" }],
+      },
+    });
+    expect(calls).toEqual([]);
+  });
+
   test("submit_mapping calls onSubmit and terminates", async () => {
     let submitted: unknown;
     const tools = createMappingTools({

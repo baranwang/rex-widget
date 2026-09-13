@@ -24,25 +24,31 @@ function isProviderAllowed(provider: string, providers?: string[]): boolean {
 }
 
 async function fetch360Rows(query: string, fetchImpl: typeof fetch): Promise<unknown[]> {
-  const params = new URLSearchParams({
-    force_v: "1",
-    kw: query,
-    pageno: "1",
-    v_ap: "1",
-    tab: "all",
-  });
-  const response = await fetchImpl(`${KAN360_INDEX_URL}?${params.toString()}`);
-  if (!response.ok) {
+  try {
+    const params = new URLSearchParams({
+      force_v: "1",
+      kw: query,
+      pageno: "1",
+      v_ap: "1",
+      tab: "all",
+    });
+    const response = await fetchImpl(`${KAN360_INDEX_URL}?${params.toString()}`, {
+      signal: AbortSignal.timeout(120_000),
+    });
+    if (!response.ok) {
+      return [];
+    }
+    const payload = (await response.json()) as {
+      data?: { longData?: { rows?: unknown[] } | unknown[] };
+    };
+    const longData = payload.data?.longData;
+    if (Array.isArray(longData)) {
+      return [];
+    }
+    return Array.isArray(longData?.rows) ? longData.rows : [];
+  } catch {
     return [];
   }
-  const payload = (await response.json()) as {
-    data?: { longData?: { rows?: unknown[] } | unknown[] };
-  };
-  const longData = payload.data?.longData;
-  if (Array.isArray(longData)) {
-    return [];
-  }
-  return Array.isArray(longData?.rows) ? longData.rows : [];
 }
 
 async function searchMgtvAndRenren(
@@ -101,7 +107,12 @@ async function searchPlatforms(
   fetchImpl: typeof fetch,
 ): Promise<SearchOutput["platforms"]> {
   const rows = await fetch360Rows(input.query, fetchImpl);
-  let platforms = await platformsFrom360Rows(rows, input);
+  let platforms: SearchOutput["platforms"] = [];
+  try {
+    platforms = await platformsFrom360Rows(rows, input);
+  } catch {
+    platforms = [];
+  }
   platforms = await searchMgtvAndRenren(input, platforms);
   const limit = input.limit ?? 12;
   return dedupePlatforms(platforms).slice(0, limit);

@@ -8,6 +8,7 @@ import {
   snapshotMappingWorkspace,
 } from "./mapping-agent-session.ts";
 import type { MappingCandidate, SubmitMapping } from "./mapping-agent-tools/submit.ts";
+import { getTmdb } from "./mapping-agent-tools/tmdb.ts";
 import type { CanonicalMapping } from "./schema.ts";
 import { canonicalMappingSchema } from "./schema.ts";
 
@@ -450,10 +451,20 @@ export async function runMappingAgent(options: MappingAgentOptions): Promise<Map
       changed: artifacts.changed,
       changedFiles: artifacts.changedFiles,
     });
+    let mappingYear: number | undefined;
+    try {
+      const tmdb = await getTmdb({ tmdbId: mapping.tmdbId, type: mapping.type }, env);
+      if (tmdb.year !== undefined) {
+        mappingYear = tmdb.year;
+      }
+    } catch {
+      // artifacts already written; omit year if TMDB lookup fails
+    }
     const summary: MappingAgentSummary = {
       status: "success",
       issueNumber: options.issueNumber,
       mappingTitle: mapping.title,
+      ...(mappingYear === undefined ? {} : { mappingYear }),
       changedFiles: summaryChangedFiles(options.issueNumber, mapping, artifacts),
       message: artifacts.changed
         ? `TMDB mapping artifacts written for ${mapping.title}`

@@ -1,9 +1,22 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, test } from "@rstest/core";
+import { afterEach, beforeEach, describe, expect, rs, test } from "@rstest/core";
 import { runMappingAgent } from "./mapping-agent.ts";
 import { restoreMappingWorkspace, runPiMappingSession, snapshotMappingWorkspace } from "./mapping-agent-session.ts";
+
+rs.mock("./mapping-agent-tools/provider.ts", async () => {
+  const actual = await rs.importActual<typeof import("./mapping-agent-tools/provider.ts")>(
+    "./mapping-agent-tools/provider.ts",
+  );
+  return {
+    ...actual,
+    listEpisodesTool: rs.fn(async () => ({
+      ok: true,
+      episodes: [{ episodeNumber: 1, episodeName: "e1" }],
+    })),
+  };
+});
 
 const tempDirs: string[] = [];
 
@@ -75,6 +88,15 @@ describe("runPiMappingSession", () => {
 });
 
 describe("runMappingAgent host gates", () => {
+  beforeEach(async () => {
+    const { listEpisodesTool } = await import("./mapping-agent-tools/provider.ts");
+    rs.mocked(listEpisodesTool).mockReset();
+    rs.mocked(listEpisodesTool).mockResolvedValue({
+      ok: true,
+      episodes: [{ episodeNumber: 1, episodeName: "e1" }],
+    });
+  });
+
   test("rejects confident submit without get_tmdb in the tool log", async () => {
     const summary = await runMappingAgent({
       issueNumber: 42,

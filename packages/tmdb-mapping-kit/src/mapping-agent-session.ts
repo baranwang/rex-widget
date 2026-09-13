@@ -1,10 +1,12 @@
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import {
   createAgentSession,
   DefaultResourceLoader,
   ModelRuntime,
   SessionManager,
+  SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import { mappingModelSelection } from "./mapping-agent-env.ts";
 import { buildMappingAgentSystemPrompt } from "./mapping-agent-prompt.ts";
@@ -105,8 +107,21 @@ async function createPiMappingSession(options: {
     input: ["text"] as Array<"text" | "image">,
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
   };
+  const emptyTempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tmdb-mapping-agent-"));
   const loader = new DefaultResourceLoader({
+    cwd: options.repoRoot,
+    agentDir: emptyTempDir,
+    settingsManager: SettingsManager.inMemory(),
+    noExtensions: true,
+    noSkills: true,
+    noPromptTemplates: true,
+    noThemes: true,
+    noContextFiles: true,
     systemPromptOverride: () => buildMappingAgentSystemPrompt(),
+    skillsOverride: () => ({ skills: [], diagnostics: [] }),
+    promptsOverride: () => ({ prompts: [], diagnostics: [] }),
+    agentsFilesOverride: () => ({ agentsFiles: [] }),
+    appendSystemPromptOverride: () => [],
   });
   await loader.reload();
   const modelRuntime = await ModelRuntime.create({
