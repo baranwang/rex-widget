@@ -5,18 +5,12 @@ import { afterEach, beforeEach, describe, expect, rs, test } from "@rstest/core"
 import { runMappingAgent } from "./mapping-agent.ts";
 import { restoreMappingWorkspace, runPiMappingSession, snapshotMappingWorkspace } from "./mapping-agent-session.ts";
 
-rs.mock("./mapping-agent-tools/provider.ts", async () => {
-  const actual = await rs.importActual<typeof import("./mapping-agent-tools/provider.ts")>(
-    "./mapping-agent-tools/provider.ts",
-  );
-  return {
-    ...actual,
-    listEpisodesTool: rs.fn(async () => ({
-      ok: true,
-      episodes: [{ episodeNumber: 1, episodeName: "e1" }],
-    })),
-  };
-});
+rs.mock("./mapping-agent-tools/provider.ts", () => ({
+  listEpisodesTool: rs.fn(async () => ({
+    ok: true,
+    episodes: [{ episodeNumber: 1, episodeName: "e1" }],
+  })),
+}));
 
 const tempDirs: string[] = [];
 
