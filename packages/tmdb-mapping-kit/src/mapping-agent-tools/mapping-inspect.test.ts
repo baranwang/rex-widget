@@ -129,4 +129,15 @@ describe("mapping inspect helpers", () => {
       episodeNumber: 25,
     });
   });
+
+  test("probeMapping rejects a TV provider that omits season", async () => {
+    await expect(
+      probeMapping("/tmp/unused", {
+        type: "tv",
+        tmdbId: 1,
+        title: "Demo",
+        providers: [{ provider: "bilibili", idString: "seasonId=1", epOffset: 0 }],
+      }),
+    ).rejects.toThrow();
+  });
 });

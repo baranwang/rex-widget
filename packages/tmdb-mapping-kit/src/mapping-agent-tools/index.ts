@@ -1,7 +1,7 @@
 import { defineTool } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import type { MappingToolDetail } from "../mapping-agent-evidence.ts";
-import type { CanonicalMapping } from "../schema.ts";
+import { type CanonicalMapping, canonicalMappingSchema } from "../schema.ts";
 import { toolJson } from "./json-result.ts";
 import { listExistingMapping, previewMerge, probeMapping } from "./mapping-inspect.ts";
 import {
@@ -215,7 +215,11 @@ export function createMappingTools(options: {
       sampleEpisode: Type.Optional(Type.Number()),
     }),
     async execute(_toolCallId, params) {
-      const result = await probeMapping(repoRoot, params.mapping as CanonicalMapping, params.sampleEpisode);
+      const parsed = canonicalMappingSchema.safeParse(params.mapping);
+      if (!parsed.success) {
+        return toolResult({ ok: false, error: parsed.error.message });
+      }
+      const result = await probeMapping(repoRoot, parsed.data, params.sampleEpisode);
       const probe = result
         .filter((item) => item.ok)
         .map((item) => ({

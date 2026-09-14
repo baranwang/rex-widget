@@ -79,6 +79,39 @@ describe("runPiMappingSession", () => {
     });
     expect(submitted).toEqual({ status: "ambiguous", reason: "need platform url" });
   });
+
+  test("aborts when the twelfth turn ends", async () => {
+    const abort = rs.fn(async () => {});
+    let onEvent: ((event: { type: string }) => void) | undefined;
+    await runPiMappingSession({
+      issueNumber: 42,
+      issueBody: "body",
+      repoRoot: tempRepo(),
+      env: sessionEnv,
+      createSession: async ({ customTools }) => {
+        const submit = customTools.find((tool) => tool.name === "submit_mapping");
+        return {
+          session: {
+            subscribe: (listener) => {
+              onEvent = listener;
+              return () => {};
+            },
+            prompt: async () => {
+              for (let i = 0; i < 11; i += 1) {
+                onEvent?.({ type: "turn_end" });
+              }
+              expect(abort).not.toHaveBeenCalled();
+              onEvent?.({ type: "turn_end" });
+              expect(abort).toHaveBeenCalledTimes(1);
+              await submit.execute("1", { status: "ambiguous", reason: "capped" });
+            },
+            abort,
+            dispose: () => {},
+          },
+        };
+      },
+    });
+  });
 });
 
 describe("runMappingAgent host gates", () => {

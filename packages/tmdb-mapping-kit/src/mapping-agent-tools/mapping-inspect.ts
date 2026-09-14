@@ -85,9 +85,10 @@ function routingFromProvider(provider: CanonicalMapping["providers"][number]): P
 
 export async function probeMapping(
   _repoRoot: string,
-  mapping: CanonicalMapping,
+  mappingInput: unknown,
   sampleEpisode?: number,
 ): Promise<ProbeResult[]> {
+  const mapping = canonicalMappingSchema.parse(mappingInput);
   const results: ProbeResult[] = [];
   if (mapping.type === "movie") {
     for (const provider of mapping.providers) {

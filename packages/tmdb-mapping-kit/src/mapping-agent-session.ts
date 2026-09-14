@@ -184,7 +184,7 @@ export async function runPiMappingSession(options: {
     session.subscribe((event) => {
       if (event.type !== "turn_end") return;
       turnCount += 1;
-      if (turnCount > mappingAgentMaxTurns) {
+      if (turnCount >= mappingAgentMaxTurns) {
         void session.abort();
       }
     });

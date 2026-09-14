@@ -119,6 +119,27 @@ describe("createMappingTools", () => {
     expect(calls).toEqual([]);
   });
 
+  test("does not record probe_mapping when the mapping fails schema", async () => {
+    const calls: string[] = [];
+    const tools = createMappingTools({
+      env: {},
+      repoRoot: "/tmp",
+      onTool: (name) => calls.push(name),
+      onSubmit: () => {},
+    });
+    const probeMappingTool = tools.find((tool) => tool.name === "probe_mapping");
+    const result = await probeMappingTool?.execute("1", {
+      mapping: {
+        type: "tv",
+        tmdbId: 1,
+        title: "Demo",
+        providers: [{ provider: "bilibili", idString: "seasonId=1", epOffset: 0 }],
+      },
+    });
+    expect(calls).toEqual([]);
+    expect(result).toMatchObject({ details: { ok: false } });
+  });
+
   test("submit_mapping calls onSubmit and terminates", async () => {
     let submitted: unknown;
     const tools = createMappingTools({
