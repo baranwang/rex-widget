@@ -1,6 +1,6 @@
 import { parseProviderUrl } from "@rexnow/scraper-kit";
 import { expect, rs, test } from "@rstest/core";
-import { platformsFrom360Rows } from "./360kan-series.ts";
+import { platformsFrom360Rows } from "./360kan.ts";
 
 rs.mock("@rexnow/scraper-kit", { spy: true });
 

@@ -1,6 +1,7 @@
 import { createScraperRegistry, generateProviderIdString } from "@rexnow/scraper-kit";
-import { platformsFrom360Rows, type SearchInput, type SearchOutput } from "./360kan-series.ts";
-import { searchTmdb } from "./tmdb.ts";
+import { searchTmdb } from "../tmdb.ts";
+import { platformsFrom360Rows } from "./360kan.ts";
+import type { SearchInput, SearchOutput } from "./types.ts";
 
 const KAN360_INDEX_URL = "https://api.so.360kan.com/index";
 
@@ -130,4 +131,4 @@ export async function searchCatalog(
   return { tmdb, platforms };
 }
 
-export type { SearchInput, SearchOutput, SearchScope } from "./360kan-series.ts";
+export type { SearchInput, SearchOutput, SearchScope } from "./types.ts";

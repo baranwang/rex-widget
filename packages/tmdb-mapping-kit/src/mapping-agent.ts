@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { type HttpAdapterRequestOptions, initializeFetchAdapter } from "@rexnow/scraper-kit/runtime";
+import { assertConfidentMappingEvidence, createMappingToolEvidence } from "./mapping-agent-evidence.ts";
 import {
   type MappingSessionFactory,
   restoreMappingWorkspace,
@@ -417,6 +418,7 @@ export async function runMappingAgent(options: MappingAgentOptions): Promise<Map
   const snapshot = snapshotMappingWorkspace(repoRoot);
   try {
     const toolLog: string[] = [];
+    const toolEvidence = createMappingToolEvidence();
     let submitted: SubmitMapping;
     try {
       submitted = await runPiMappingSession({
@@ -426,6 +428,7 @@ export async function runMappingAgent(options: MappingAgentOptions): Promise<Map
         env,
         createSession: options.createSession,
         toolLog,
+        toolEvidence,
       });
     } finally {
       restoreMappingWorkspace(repoRoot, snapshot);
@@ -433,13 +436,8 @@ export async function runMappingAgent(options: MappingAgentOptions): Promise<Map
     if (submitted.status === "ambiguous") {
       throw new AmbiguousMappingError(submitted.reason);
     }
-    if (!toolLog.includes("get_tmdb")) {
-      throw new Error("get_tmdb is required before a confident submit");
-    }
-    if (!toolLog.includes("probe_mapping") && !toolLog.includes("list_episodes")) {
-      throw new Error("probe_mapping or list_episodes is required before a confident submit");
-    }
     const mapping = toCanonicalMapping(submitted.mapping);
+    assertConfidentMappingEvidence(mapping, toolEvidence);
     mappingAgentLog("canonical mapping created", {
       type: mapping.type,
       tmdbId: mapping.tmdbId,

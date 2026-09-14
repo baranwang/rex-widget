@@ -1,5 +1,5 @@
 import { describe, expect, test } from "@rstest/core";
-import { searchCatalog } from "./search.ts";
+import { searchCatalog } from "./index.ts";
 
 describe("searchCatalog", () => {
   test("defaults scope to all and keeps the other side when one source fails", async () => {

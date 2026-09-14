@@ -1,5 +1,6 @@
 import { defineTool } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
+import type { MappingToolDetail } from "../mapping-agent-evidence.ts";
 import type { CanonicalMapping } from "../schema.ts";
 import { toolJson } from "./json-result.ts";
 import { listExistingMapping, previewMerge, probeMapping } from "./mapping-inspect.ts";
@@ -10,7 +11,7 @@ import {
   parseIdStringTool,
   parseProviderUrlTool,
 } from "./provider.ts";
-import { searchCatalog } from "./search.ts";
+import { searchCatalog } from "./search/index.ts";
 import { parseSubmitMapping, type SubmitMapping } from "./submit.ts";
 import { getTmdb } from "./tmdb.ts";
 
@@ -46,7 +47,7 @@ function toolResult(result: unknown) {
 export function createMappingTools(options: {
   env: NodeJS.ProcessEnv;
   repoRoot: string;
-  onTool: (name: string) => void;
+  onTool: (name: string, detail?: MappingToolDetail) => void;
   onSubmit: (value: SubmitMapping) => void;
 }) {
   const { env, repoRoot, onTool, onSubmit } = options;
@@ -86,7 +87,7 @@ export function createMappingTools(options: {
     }),
     async execute(_toolCallId, params) {
       const result = await getTmdb(params, env);
-      onTool("get_tmdb");
+      onTool("get_tmdb", { getTmdb: { tmdbId: params.tmdbId, type: params.type } });
       return toolResult(result);
     },
   });
@@ -163,7 +164,13 @@ export function createMappingTools(options: {
     async execute(_toolCallId, params) {
       const result = await listEpisodesTool(params);
       if (result.ok === true) {
-        onTool("list_episodes");
+        onTool("list_episodes", {
+          listEpisodes: {
+            provider: params.provider,
+            idString: params.idString,
+            episodeCount: result.episodes.length,
+          },
+        });
       }
       return toolResult(result);
     },
@@ -208,8 +215,15 @@ export function createMappingTools(options: {
     }),
     async execute(_toolCallId, params) {
       const result = await probeMapping(repoRoot, params.mapping as CanonicalMapping, params.sampleEpisode);
-      if (result.some((item) => item.ok)) {
-        onTool("probe_mapping");
+      const probe = result
+        .filter((item) => item.ok)
+        .map((item) => ({
+          provider: item.provider,
+          idString: item.idString,
+          episodeCount: item.episodes.length,
+        }));
+      if (probe.some((item) => item.episodeCount > 0)) {
+        onTool("probe_mapping", { probe });
       }
       return toolResult(result);
     },

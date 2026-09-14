@@ -9,6 +9,11 @@ import {
   SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import { mappingModelSelection } from "./mapping-agent-env.ts";
+import {
+  createMappingToolEvidence,
+  type MappingToolEvidence,
+  recordMappingToolEvidence,
+} from "./mapping-agent-evidence.ts";
 import { buildMappingAgentSystemPrompt } from "./mapping-agent-prompt.ts";
 import { createMappingTools, mappingAgentToolNames } from "./mapping-agent-tools/index.ts";
 import type { SubmitMapping } from "./mapping-agent-tools/submit.ts";
@@ -148,14 +153,17 @@ export async function runPiMappingSession(options: {
   env: NodeJS.ProcessEnv;
   createSession?: MappingSessionFactory;
   toolLog?: string[];
+  toolEvidence?: MappingToolEvidence;
 }): Promise<SubmitMapping> {
   const toolLog = options.toolLog ?? [];
+  const toolEvidence = options.toolEvidence ?? createMappingToolEvidence();
   let submitted: SubmitMapping | undefined;
   const tools = createMappingTools({
     env: options.env,
     repoRoot: options.repoRoot,
-    onTool: (name) => {
+    onTool: (name, detail) => {
       toolLog.push(name);
+      recordMappingToolEvidence(toolEvidence, detail);
     },
     onSubmit: (value) => {
       submitted = value;

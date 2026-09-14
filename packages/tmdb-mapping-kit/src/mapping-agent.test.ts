@@ -826,4 +826,44 @@ https://www.mgtv.com/h/860862.html
       message: "probe_mapping or list_episodes is required before a confident submit",
     });
   });
+
+  test("rejects confident submit when probe evidence belongs to another mapping", async () => {
+    const fetchImpl: typeof fetch = async () =>
+      ({
+        ok: true,
+        json: async () => ({ name: "将夜", first_air_date: "2018-10-31" }),
+      }) as Response;
+
+    const summary = await withMockedFetch(fetchImpl, () =>
+      runMappingAgent({
+        issueNumber: 42,
+        issueBody: "https://www.themoviedb.org/tv/282136",
+        repoRoot: fs.mkdtempSync(path.join(os.tmpdir(), "tmdb-mapping-run-")),
+        env: sessionEnv,
+        createSession: createFakeSession(async (customTools) => {
+          await requireTool(customTools, "get_tmdb").execute("get-tmdb", {
+            tmdbId: jiangyeMapping.tmdbId,
+            type: jiangyeMapping.type,
+          });
+          await requireTool(customTools, "probe_mapping").execute("probe", {
+            mapping: {
+              type: "movie",
+              tmdbId: 1,
+              title: "Demo",
+              providers: [{ provider: "iqiyi", idString: "entityId=demo" }],
+            },
+          });
+          await requireTool(customTools, "submit_mapping").execute("submit", {
+            status: "confident",
+            mapping: jiangyeMapping,
+          });
+        }),
+      }),
+    );
+
+    expect(summary).toMatchObject({
+      status: "error",
+      message: "probe_mapping or list_episodes is required before a confident submit",
+    });
+  });
 });
