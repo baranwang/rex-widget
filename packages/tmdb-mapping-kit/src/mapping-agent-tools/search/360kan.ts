@@ -48,7 +48,7 @@ export const parseQihooMgtvUrl = (url: string) => {
 };
 
 export const matchesQihooSeason = (title: string, season?: number) => {
-  if (!season) return true;
+  if (season === undefined) return true;
   const seasonText = title.match(/第\s*([0-9零〇一二两三四五六七八九十百千万萬]+)\s*季/)?.[1];
   const resultSeason = seasonText ? parseVarietyEpisodeIdentity(`第${seasonText}期`).episodeNumber : null;
   return resultSeason === null ? season <= 1 : resultSeason === season;

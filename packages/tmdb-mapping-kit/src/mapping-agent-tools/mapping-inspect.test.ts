@@ -72,6 +72,8 @@ describe("mapping inspect helpers", () => {
         idString: "seasonId=45962",
         ok: true,
         episodes: [{ provider: "bilibili", episodeId: "seasonId=45962", episodeTitle: "第1集", episodeNumber: 1 }],
+        season: 1,
+        epOffset: 0,
       },
     ]);
     expect(mockedListEpisodes).toHaveBeenCalledWith({
@@ -102,6 +104,20 @@ describe("mapping inspect helpers", () => {
 
     const results = await probeMapping("/tmp/unused", splitMapping);
     expect(results).toHaveLength(2);
+    expect(results[0]).toMatchObject({
+      provider: "bilibili",
+      idString: "seasonId=a",
+      season: 1,
+      epRange: [1, 24],
+      epOffset: 0,
+    });
+    expect(results[1]).toMatchObject({
+      provider: "bilibili",
+      idString: "seasonId=b",
+      season: 1,
+      epRange: [25, 47],
+      epOffset: 0,
+    });
     expect(mockedListEpisodes).toHaveBeenNthCalledWith(1, {
       provider: "bilibili",
       idString: "seasonId=a",

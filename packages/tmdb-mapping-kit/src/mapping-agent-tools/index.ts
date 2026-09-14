@@ -169,6 +169,7 @@ export function createMappingTools(options: {
             provider: params.provider,
             idString: params.idString,
             episodeCount: result.episodes.length,
+            ...(params.episodeNumber === undefined ? {} : { episodeNumber: params.episodeNumber }),
           },
         });
       }
@@ -221,6 +222,9 @@ export function createMappingTools(options: {
           provider: item.provider,
           idString: item.idString,
           episodeCount: item.episodes.length,
+          ...(item.season === undefined ? {} : { season: item.season }),
+          ...(item.epRange === undefined ? {} : { epRange: item.epRange }),
+          ...(item.epOffset === undefined ? {} : { epOffset: item.epOffset }),
         }));
       if (probe.some((item) => item.episodeCount > 0)) {
         onTool("probe_mapping", { probe });

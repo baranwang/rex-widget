@@ -4,6 +4,10 @@ export type MappingProviderEvidence = {
   provider: string;
   idString: string;
   episodeCount: number;
+  season?: number;
+  epRange?: readonly [number, number];
+  epOffset?: number;
+  episodeNumber?: number;
 };
 
 export type MappingTmdbEvidence = {
@@ -40,13 +44,40 @@ export function recordMappingToolEvidence(evidence: MappingToolEvidence, detail?
   }
 }
 
-function coversProvider(
-  evidence: MappingProviderEvidence[],
-  provider: { provider: string; idString: string },
-): boolean {
-  return evidence.some(
-    (item) => item.provider === provider.provider && item.idString === provider.idString && item.episodeCount > 0,
-  );
+function episodeRangesEqual(left?: readonly [number, number], right?: readonly [number, number]): boolean {
+  if (!left && !right) {
+    return true;
+  }
+  if (!left || !right) {
+    return false;
+  }
+  return left[0] === right[0] && left[1] === right[1];
+}
+
+function coversProvider(evidence: MappingProviderEvidence[], provider: CanonicalMapping["providers"][number]): boolean {
+  return evidence.some((item) => {
+    if (item.provider !== provider.provider || item.idString !== provider.idString || item.episodeCount <= 0) {
+      return false;
+    }
+    if (!("season" in provider)) {
+      return true;
+    }
+    if (item.season !== undefined || item.epRange !== undefined || item.epOffset !== undefined) {
+      return (
+        item.season === provider.season &&
+        episodeRangesEqual(item.epRange, provider.epRange) &&
+        (item.epOffset ?? 0) === provider.epOffset
+      );
+    }
+    if (item.episodeNumber !== undefined) {
+      if (!provider.epRange) {
+        return true;
+      }
+      const tmdbEpisode = item.episodeNumber - provider.epOffset;
+      return tmdbEpisode >= provider.epRange[0] && tmdbEpisode <= provider.epRange[1];
+    }
+    return provider.epRange === undefined;
+  });
 }
 
 export function applyAuthoritativeTmdbTitle(

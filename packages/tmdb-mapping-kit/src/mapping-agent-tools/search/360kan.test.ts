@@ -1,6 +1,6 @@
 import { parseProviderUrl } from "@rexnow/scraper-kit";
 import { expect, rs, test } from "@rstest/core";
-import { platformsFrom360Rows } from "./360kan.ts";
+import { matchesQihooSeason, platformsFrom360Rows } from "./360kan.ts";
 
 rs.mock("@rexnow/scraper-kit", { spy: true });
 
@@ -75,4 +75,26 @@ test("keeps other playlinks when a qiyi parseProviderUrl throws", async () => {
   } finally {
     rs.mocked(parseProviderUrl).mockRestore();
   }
+});
+
+test("season 0 does not accept later-season 360 titles", async () => {
+  expect(matchesQihooSeason("将夜第2季", 0)).toBe(false);
+  expect(matchesQihooSeason("将夜", 0)).toBe(true);
+
+  const platforms = await platformsFrom360Rows(
+    [
+      {
+        cat_id: "2",
+        titleTxt: "将夜",
+        playlinks: { qq: "https://v.qq.com/x/cover/cidS0.html" },
+      },
+      {
+        cat_id: "2",
+        titleTxt: "将夜第2季",
+        playlinks: { qq: "https://v.qq.com/x/cover/cidS2.html" },
+      },
+    ],
+    { query: "将夜", type: "tv", season: 0 },
+  );
+  expect(platforms).toEqual([{ provider: "tencent", idString: "cid=cidS0", source: "360kan", title: "将夜" }]);
 });

@@ -60,9 +60,28 @@ export function previewMerge(repoRoot: string, incoming: CanonicalMapping) {
   }
 }
 
-type ProbeResult =
+type ProbeRouting = {
+  season?: number;
+  epRange?: readonly [number, number];
+  epOffset?: number;
+};
+
+type ProbeResult = (
   | { provider: string; idString: string; ok: true; episodes: Awaited<ReturnType<typeof listEpisodesTool>>["episodes"] }
-  | { provider: string; idString: string; ok: false; error: string };
+  | { provider: string; idString: string; ok: false; error: string }
+) &
+  ProbeRouting;
+
+function routingFromProvider(provider: CanonicalMapping["providers"][number]): ProbeRouting {
+  if (!("season" in provider)) {
+    return {};
+  }
+  return {
+    season: provider.season,
+    epOffset: provider.epOffset,
+    ...(provider.epRange ? { epRange: provider.epRange } : {}),
+  };
+}
 
 export async function probeMapping(
   _repoRoot: string,
@@ -79,6 +98,7 @@ export async function probeMapping(
           idString: provider.idString,
           ok: true,
           episodes: result.episodes,
+          ...routingFromProvider(provider),
         });
       } else {
         results.push({
@@ -86,6 +106,7 @@ export async function probeMapping(
           idString: provider.idString,
           ok: false,
           error: result.error,
+          ...routingFromProvider(provider),
         });
       }
     }
@@ -105,6 +126,7 @@ export async function probeMapping(
         idString: provider.idString,
         ok: true,
         episodes: result.episodes,
+        ...routingFromProvider(provider),
       });
     } else {
       results.push({
@@ -112,6 +134,7 @@ export async function probeMapping(
         idString: provider.idString,
         ok: false,
         error: result.error,
+        ...routingFromProvider(provider),
       });
     }
   }
