@@ -20,16 +20,13 @@ function episodeInRange(episode: number, epRange?: readonly [number, number]): b
   return episode >= epRange[0] && episode <= epRange[1];
 }
 
-function resolveSampleEpisode(mapping: CanonicalMapping, sampleEpisode?: number): number {
-  if (sampleEpisode !== undefined) {
+function resolveProviderEpisode(provider: CanonicalMapping["providers"][number], sampleEpisode?: number): number {
+  const epRange = "epRange" in provider ? provider.epRange : undefined;
+  if (sampleEpisode !== undefined && episodeInRange(sampleEpisode, epRange)) {
     return sampleEpisode;
   }
-  if (mapping.type === "tv") {
-    for (const provider of mapping.providers) {
-      if ("epRange" in provider && provider.epRange) {
-        return provider.epRange[0];
-      }
-    }
+  if (epRange) {
+    return epRange[0];
   }
   return 1;
 }
@@ -95,11 +92,8 @@ export async function probeMapping(
     return results;
   }
 
-  const episode = resolveSampleEpisode(mapping, sampleEpisode);
   for (const provider of mapping.providers) {
-    if (!episodeInRange(episode, provider.epRange)) {
-      continue;
-    }
+    const episode = resolveProviderEpisode(provider, sampleEpisode);
     const result = await listEpisodesTool({
       provider: provider.provider,
       idString: provider.idString,

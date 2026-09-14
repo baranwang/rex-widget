@@ -6,14 +6,20 @@ export type MappingProviderEvidence = {
   episodeCount: number;
 };
 
+export type MappingTmdbEvidence = {
+  tmdbId: number;
+  type: "movie" | "tv";
+  title: string;
+};
+
 export type MappingToolEvidence = {
-  getTmdb: Array<{ tmdbId: number; type: "movie" | "tv" }>;
+  getTmdb: MappingTmdbEvidence[];
   listed: MappingProviderEvidence[];
   probed: MappingProviderEvidence[];
 };
 
 export type MappingToolDetail = {
-  getTmdb?: { tmdbId: number; type: "movie" | "tv" };
+  getTmdb?: MappingTmdbEvidence;
   listEpisodes?: MappingProviderEvidence;
   probe?: MappingProviderEvidence[];
 };
@@ -41,6 +47,19 @@ function coversProvider(
   return evidence.some(
     (item) => item.provider === provider.provider && item.idString === provider.idString && item.episodeCount > 0,
   );
+}
+
+export function applyAuthoritativeTmdbTitle(
+  mapping: CanonicalMapping,
+  evidence: MappingToolEvidence,
+): CanonicalMapping {
+  const match = [...evidence.getTmdb]
+    .reverse()
+    .find((item) => item.tmdbId === mapping.tmdbId && item.type === mapping.type && item.title);
+  if (!match) {
+    return mapping;
+  }
+  return { ...mapping, title: match.title };
 }
 
 export function assertConfidentMappingEvidence(mapping: CanonicalMapping, evidence: MappingToolEvidence): void {

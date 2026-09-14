@@ -1,7 +1,11 @@
 import fs from "node:fs";
 import path from "node:path";
 import { type HttpAdapterRequestOptions, initializeFetchAdapter } from "@rexnow/scraper-kit/runtime";
-import { assertConfidentMappingEvidence, createMappingToolEvidence } from "./mapping-agent-evidence.ts";
+import {
+  applyAuthoritativeTmdbTitle,
+  assertConfidentMappingEvidence,
+  createMappingToolEvidence,
+} from "./mapping-agent-evidence.ts";
 import {
   type MappingSessionFactory,
   restoreMappingWorkspace,
@@ -436,7 +440,7 @@ export async function runMappingAgent(options: MappingAgentOptions): Promise<Map
     if (submitted.status === "ambiguous") {
       throw new AmbiguousMappingError(submitted.reason);
     }
-    const mapping = toCanonicalMapping(submitted.mapping);
+    const mapping = applyAuthoritativeTmdbTitle(toCanonicalMapping(submitted.mapping), toolEvidence);
     assertConfidentMappingEvidence(mapping, toolEvidence);
     mappingAgentLog("canonical mapping created", {
       type: mapping.type,

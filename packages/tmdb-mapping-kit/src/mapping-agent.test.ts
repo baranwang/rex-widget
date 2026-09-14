@@ -604,6 +604,34 @@ https://www.bilibili.com/bangumi/play/ep3409878
     expect(fs.existsSync(path.join(repoRoot, ".changeset", "tmdb-mapping-issue-2.md"))).toBe(true);
   });
 
+  test("replaces a submitted title with the get_tmdb title", async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tmdb-mapping-run-"));
+    const repoRoot = tempDir;
+    const dataPath = path.join(repoRoot, mappingDataRelativePath(jiangyeMapping));
+    fs.mkdirSync(path.dirname(dataPath), { recursive: true });
+    fs.mkdirSync(path.join(repoRoot, ".changeset"), { recursive: true });
+    const fetchImpl: typeof fetch = async () =>
+      ({
+        ok: true,
+        json: async () => ({ name: "将夜", first_air_date: "2018-10-31" }),
+      }) as Response;
+
+    const summary = await withMockedFetch(fetchImpl, () =>
+      runMappingAgent({
+        issueNumber: 2,
+        issueBody: "https://www.themoviedb.org/tv/282136",
+        repoRoot,
+        env: sessionEnv,
+        createSession: createFakeSession((customTools) =>
+          executeLoggedSubmit(customTools, { ...jiangyeMapping, title: "错的" }),
+        ),
+      }),
+    );
+
+    expect(summary).toMatchObject({ status: "success", mappingTitle: "将夜" });
+    expect(JSON.parse(fs.readFileSync(dataPath, "utf8")).title).toBe("将夜");
+  });
+
   test("defaults missing TV season to season 1 via submit_mapping", async () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tmdb-mapping-run-"));
     const repoRoot = tempDir;

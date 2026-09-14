@@ -61,4 +61,32 @@ describe("searchTmdb", () => {
     const hits = await searchTmdb({ query: "将夜", type: "tv", limit: 1 }, { TMDB_ACCESS_TOKEN: "token" }, fetchImpl);
     expect(hits).toEqual([{ tmdbId: 1, type: "tv", title: "A", year: 2020, url: "https://www.themoviedb.org/tv/1" }]);
   });
+
+  test("searches movie and TV before applying the untyped limit", async () => {
+    const urls: string[] = [];
+    const fetchImpl: typeof fetch = async (input) => {
+      urls.push(String(input));
+      if (String(input).includes("/search/movie")) {
+        return {
+          ok: true,
+          json: async () => ({
+            results: Array.from({ length: 8 }, (_, index) => ({
+              id: index + 1,
+              title: `M${index + 1}`,
+              release_date: "2020-01-01",
+            })),
+          }),
+        } as Response;
+      }
+      return {
+        ok: true,
+        json: async () => ({ results: [{ id: 282136, name: "将夜", first_air_date: "2018-10-31" }] }),
+      } as Response;
+    };
+    const hits = await searchTmdb({ query: "将夜", limit: 8 }, { TMDB_ACCESS_TOKEN: "token" }, fetchImpl);
+    expect(urls.some((url) => url.includes("/search/movie"))).toBe(true);
+    expect(urls.some((url) => url.includes("/search/tv"))).toBe(true);
+    expect(hits.some((hit) => hit.type === "tv" && hit.tmdbId === 282136)).toBe(true);
+    expect(hits).toHaveLength(8);
+  });
 });

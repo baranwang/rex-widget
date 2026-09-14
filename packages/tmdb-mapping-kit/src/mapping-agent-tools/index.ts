@@ -87,7 +87,7 @@ export function createMappingTools(options: {
     }),
     async execute(_toolCallId, params) {
       const result = await getTmdb(params, env);
-      onTool("get_tmdb", { getTmdb: { tmdbId: params.tmdbId, type: params.type } });
+      onTool("get_tmdb", { getTmdb: { tmdbId: params.tmdbId, type: params.type, title: result.title } });
       return toolResult(result);
     },
   });

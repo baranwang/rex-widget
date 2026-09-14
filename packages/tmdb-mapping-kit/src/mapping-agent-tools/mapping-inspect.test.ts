@@ -80,4 +80,37 @@ describe("mapping inspect helpers", () => {
       episodeNumber: 1,
     });
   });
+
+  test("probeMapping uses each TV provider's own episode range", async () => {
+    const { listEpisodesTool } = await import("./provider.ts");
+    const mockedListEpisodes = rs.mocked(listEpisodesTool);
+    mockedListEpisodes.mockReset();
+    mockedListEpisodes.mockResolvedValue({
+      ok: true,
+      episodes: [{ episodeNumber: 1, episodeName: "e1" }],
+    });
+
+    const splitMapping: CanonicalMapping = {
+      type: "tv",
+      tmdbId: 95479,
+      title: "咒术回战",
+      providers: [
+        { season: 1, provider: "bilibili", idString: "seasonId=a", epOffset: 0, epRange: [1, 24] },
+        { season: 1, provider: "bilibili", idString: "seasonId=b", epOffset: 0, epRange: [25, 47] },
+      ],
+    };
+
+    const results = await probeMapping("/tmp/unused", splitMapping);
+    expect(results).toHaveLength(2);
+    expect(mockedListEpisodes).toHaveBeenNthCalledWith(1, {
+      provider: "bilibili",
+      idString: "seasonId=a",
+      episodeNumber: 1,
+    });
+    expect(mockedListEpisodes).toHaveBeenNthCalledWith(2, {
+      provider: "bilibili",
+      idString: "seasonId=b",
+      episodeNumber: 25,
+    });
+  });
 });

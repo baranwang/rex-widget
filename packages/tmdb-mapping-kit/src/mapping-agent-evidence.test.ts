@@ -1,5 +1,6 @@
 import { describe, expect, test } from "@rstest/core";
 import {
+  applyAuthoritativeTmdbTitle,
   assertConfidentMappingEvidence,
   createMappingToolEvidence,
   recordMappingToolEvidence,
@@ -15,7 +16,7 @@ const mapping = {
 describe("assertConfidentMappingEvidence", () => {
   test("requires get_tmdb for the submitted title", () => {
     const evidence = createMappingToolEvidence();
-    recordMappingToolEvidence(evidence, { getTmdb: { tmdbId: 1, type: "tv" } });
+    recordMappingToolEvidence(evidence, { getTmdb: { tmdbId: 1, type: "tv", title: "Demo" } });
     recordMappingToolEvidence(evidence, {
       probe: [{ provider: "bilibili", idString: "seasonId=45962", episodeCount: 1 }],
     });
@@ -26,7 +27,7 @@ describe("assertConfidentMappingEvidence", () => {
 
   test("rejects probe evidence for a different idString", () => {
     const evidence = createMappingToolEvidence();
-    recordMappingToolEvidence(evidence, { getTmdb: { tmdbId: 282136, type: "tv" } });
+    recordMappingToolEvidence(evidence, { getTmdb: { tmdbId: 282136, type: "tv", title: "将夜" } });
     recordMappingToolEvidence(evidence, {
       probe: [{ provider: "bilibili", idString: "seasonId=1", episodeCount: 3 }],
     });
@@ -37,7 +38,7 @@ describe("assertConfidentMappingEvidence", () => {
 
   test("rejects empty episode lists", () => {
     const evidence = createMappingToolEvidence();
-    recordMappingToolEvidence(evidence, { getTmdb: { tmdbId: 282136, type: "tv" } });
+    recordMappingToolEvidence(evidence, { getTmdb: { tmdbId: 282136, type: "tv", title: "将夜" } });
     recordMappingToolEvidence(evidence, {
       listEpisodes: { provider: "bilibili", idString: "seasonId=45962", episodeCount: 0 },
     });
@@ -48,10 +49,16 @@ describe("assertConfidentMappingEvidence", () => {
 
   test("accepts matching nonempty probe evidence", () => {
     const evidence = createMappingToolEvidence();
-    recordMappingToolEvidence(evidence, { getTmdb: { tmdbId: 282136, type: "tv" } });
+    recordMappingToolEvidence(evidence, { getTmdb: { tmdbId: 282136, type: "tv", title: "将夜" } });
     recordMappingToolEvidence(evidence, {
       probe: [{ provider: "bilibili", idString: "seasonId=45962", episodeCount: 2 }],
     });
     expect(() => assertConfidentMappingEvidence(mapping, evidence)).not.toThrow();
+  });
+
+  test("overwrites a submitted title with the get_tmdb title", () => {
+    const evidence = createMappingToolEvidence();
+    recordMappingToolEvidence(evidence, { getTmdb: { tmdbId: 282136, type: "tv", title: "将夜" } });
+    expect(applyAuthoritativeTmdbTitle({ ...mapping, title: "错的" }, evidence).title).toBe("将夜");
   });
 });

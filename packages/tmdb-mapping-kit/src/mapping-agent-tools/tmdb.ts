@@ -175,13 +175,24 @@ export async function searchTmdb(
 ): Promise<TmdbHit[]> {
   const limit = input.limit ?? 8;
   const types: Array<"movie" | "tv"> = input.type ? [input.type] : ["movie", "tv"];
+  const groups = await Promise.all(types.map((type) => searchTmdbType(input.query, type, input.year, env, fetchImpl)));
   const hits: TmdbHit[] = [];
-  for (const type of types) {
-    const results = await searchTmdbType(input.query, type, input.year, env, fetchImpl);
-    hits.push(...results);
-    if (hits.length >= limit) {
+  for (let index = 0; hits.length < limit; index += 1) {
+    let added = false;
+    for (const group of groups) {
+      const hit = group[index];
+      if (!hit) {
+        continue;
+      }
+      hits.push(hit);
+      added = true;
+      if (hits.length >= limit) {
+        break;
+      }
+    }
+    if (!added) {
       break;
     }
   }
-  return hits.slice(0, limit);
+  return hits;
 }
