@@ -1,55 +1,75 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import type { OpencodeClient } from "@opencode-ai/sdk/v2";
-import { createOpencode } from "@opencode-ai/sdk/v2";
-import { describe, expect, rs, test } from "@rstest/core";
-import { z } from "zod";
+import { beforeEach, describe, expect, rs, test } from "@rstest/core";
 import {
-  buildIssueFieldsPrompt,
-  buildMappingPrompt,
   createChangesetContent,
   createMappingFileContent,
   defaultRepoRoot,
   fetchTmdbMetadata,
   type IssueFormFields,
-  issueFormFieldsOutputJsonSchema,
-  issueFormFieldsSchema,
-  mappingAgentOutputJsonSchema,
   mappingDataRelativePath,
   mergeMappingFile,
-  modelResponseOutputSchema,
   modelSelection,
   parseCliArgs,
-  parseIssueFieldsStructuredResponse,
   parseMappingAgentArgs,
-  parseStructuredModelResponse,
   runMappingAgent,
   runMappingAgentCli,
   writeMappingAgentSummary,
   writeMappingArtifacts,
 } from "./mapping-agent.ts";
+import type { MappingSessionFactory } from "./mapping-agent-session.ts";
 
-rs.mock("@opencode-ai/sdk/v2", () => ({
-  createOpencode: rs.fn(),
+rs.mock("./mapping-agent-tools/provider.ts", () => ({
+  listEpisodesTool: rs.fn(async () => ({
+    ok: true,
+    episodes: [{ episodeNumber: 1, episodeName: "e1" }],
+  })),
 }));
 
-type MockOpenCodeSession = {
-  create: ReturnType<typeof rs.fn>;
-  prompt: ReturnType<typeof rs.fn>;
+type CustomTools = Parameters<MappingSessionFactory>[0]["customTools"];
+
+const jiangyeMapping = {
+  type: "tv" as const,
+  tmdbId: 282136,
+  title: "将夜",
+  providers: [{ season: 1, provider: "bilibili" as const, idString: "seasonId=45962", epOffset: 0 }],
 };
 
-function mockOpenCodeClient(session: MockOpenCodeSession): Awaited<ReturnType<typeof createOpencode>> {
-  const client: OpencodeClient = Object.create(null);
-  Object.defineProperty(client, "session", { value: session });
+beforeEach(async () => {
+  const { listEpisodesTool } = await import("./mapping-agent-tools/provider.ts");
+  rs.mocked(listEpisodesTool).mockReset();
+  rs.mocked(listEpisodesTool).mockResolvedValue({
+    ok: true,
+    episodes: [{ episodeNumber: 1, episodeName: "e1" }],
+  });
+});
 
-  return {
-    client,
-    server: {
-      url: "http://127.0.0.1:0",
-      close: rs.fn(),
+const sessionEnv = {
+  PI_API_KEY: "test-api-key",
+  PI_MODEL: "custom/model-a",
+  TMDB_ACCESS_TOKEN: "tmdb-token",
+};
+
+function requireTool(customTools: CustomTools, name: string) {
+  const tool = customTools.find((item) => item.name === name);
+  if (!tool) {
+    throw new Error(`missing tool ${name}`);
+  }
+  return tool;
+}
+
+function createFakeSession(run: (customTools: CustomTools) => Promise<void>): MappingSessionFactory {
+  return async ({ customTools }) => ({
+    session: {
+      subscribe: () => () => {},
+      prompt: async () => {
+        await run(customTools);
+      },
+      abort: async () => {},
+      dispose: () => {},
     },
-  };
+  });
 }
 
 async function withMockedFetch<T>(fetchImpl: typeof fetch, fn: () => Promise<T>): Promise<T> {
@@ -62,21 +82,28 @@ async function withMockedFetch<T>(fetchImpl: typeof fetch, fn: () => Promise<T>)
   }
 }
 
-function mockIssueFieldExtraction(structured: unknown) {
-  const mockedCreateOpencode = rs.mocked(createOpencode);
-  const sessionCreate = rs.fn().mockResolvedValueOnce({ data: { id: "session-1" } });
-  const sessionPrompt = rs.fn().mockResolvedValueOnce({
-    data: {
-      info: {
-        structured,
-      },
-    },
+async function executeLoggedSubmit(
+  customTools: CustomTools,
+  mapping: {
+    type: "movie" | "tv";
+    tmdbId: number;
+    title: string;
+    providers: Array<Record<string, unknown>>;
+  },
+  extra?: (customTools: CustomTools) => Promise<void>,
+) {
+  if (extra) {
+    await extra(customTools);
+  }
+  await requireTool(customTools, "get_tmdb").execute("get-tmdb", {
+    tmdbId: mapping.tmdbId,
+    type: mapping.type,
   });
-
-  mockedCreateOpencode.mockReset();
-  mockedCreateOpencode.mockResolvedValueOnce(mockOpenCodeClient({ create: sessionCreate, prompt: sessionPrompt }));
-
-  return { mockedCreateOpencode, sessionCreate, sessionPrompt };
+  await requireTool(customTools, "probe_mapping").execute("probe", { mapping });
+  await requireTool(customTools, "submit_mapping").execute("submit", {
+    status: "confident",
+    mapping,
+  });
 }
 
 describe("mapping agent CLI and provider config parsing", () => {
@@ -122,116 +149,7 @@ describe("mapping agent CLI and provider config parsing", () => {
   });
 });
 
-describe("issue field extraction", () => {
-  test("derives the issue field JSON schema from a Zod source of truth", () => {
-    expect(issueFormFieldsOutputJsonSchema).toEqual(z.toJSONSchema(issueFormFieldsSchema));
-    expect(issueFormFieldsOutputJsonSchema).toMatchObject({
-      type: "object",
-      properties: {
-        media_type: {
-          type: "string",
-          enum: ["movie", "tv"],
-        },
-        platform_urls: {
-          type: "array",
-        },
-      },
-      required: ["media_type", "tmdb_url", "platform_urls"],
-      additionalProperties: false,
-    });
-  });
-
-  test("builds an extraction prompt with the raw issue body and flexible label guidance", () => {
-    const issueBody = `### Title
-
-Example Show
-
-### TMDB URL
-
-https://www.themoviedb.org/tv/12345
-`;
-
-    const prompt = buildIssueFieldsPrompt(issueBody);
-
-    expect(prompt).toContain(issueBody);
-    expect(prompt).toContain("Headings and labels may vary");
-    expect(prompt).not.toContain("媒体标题");
-  });
-
-  test("parses only the structured issue fields schema", () => {
-    expect(
-      parseIssueFieldsStructuredResponse({
-        media_title: "Example Show",
-        media_type: "tv",
-        tmdb_url: "https://www.themoviedb.org/tv/12345",
-        season: null,
-        platform_urls: ["https://v.qq.com/x/cover/demo.html"],
-        notes: "extra notes",
-      }),
-    ).toEqual({
-      media_title: "Example Show",
-      media_type: "tv",
-      tmdb_url: "https://www.themoviedb.org/tv/12345",
-      season: null,
-      platform_urls: ["https://v.qq.com/x/cover/demo.html"],
-      notes: "extra notes",
-    });
-
-    expect(() =>
-      parseIssueFieldsStructuredResponse({
-        media_type: "movie",
-        platform_urls: ["https://v.qq.com/x/cover/demo.html"],
-      }),
-    ).toThrow();
-    expect(() =>
-      parseIssueFieldsStructuredResponse({
-        media_title: "Example Show",
-        media_type: "tv",
-        tmdb_url: "https://www.themoviedb.org/tv/12345",
-        season: "1",
-        platform_urls: "https://v.qq.com/x/cover/demo.html",
-      }),
-    ).toThrow();
-    expect(() =>
-      parseIssueFieldsStructuredResponse({
-        media_title: "Example Show",
-        media_type: "tv",
-        tmdb_url: "https://www.themoviedb.org/tv/12345",
-        season: null,
-        platform_urls: [],
-      }),
-    ).toThrow();
-  });
-});
-
-describe("model output validation", () => {
-  const response = {
-    status: "confident",
-    reason: "extracted from URL",
-    mapping: {
-      type: "movie",
-      tmdbId: 980477,
-      title: "Model Title",
-      providers: [{ provider: "iqiyi", idString: "entityId=demo", url: "https://v.qq.com/x/cover/demo.html" }],
-    },
-  };
-
-  test("derives the OpenCode schema from an object-root Zod source of truth", () => {
-    expect(mappingAgentOutputJsonSchema).toEqual(z.toJSONSchema(modelResponseOutputSchema));
-    expect(mappingAgentOutputJsonSchema).toMatchObject({
-      type: "object",
-      properties: {
-        status: {
-          type: "string",
-          enum: ["confident", "ambiguous"],
-        },
-      },
-      required: ["status"],
-      additionalProperties: false,
-    });
-    expect(mappingAgentOutputJsonSchema).not.toHaveProperty("anyOf");
-  });
-
+describe("issue template has no id: media_type", () => {
   test("keeps the issue template free of media type input", () => {
     const template = fs.readFileSync(
       path.resolve(process.cwd(), "..", "..", ".github/ISSUE_TEMPLATE/tmdb-platform-mapping.yml"),
@@ -240,59 +158,6 @@ describe("model output validation", () => {
     expect(template).not.toContain("id: media_type");
     expect(template).toContain("id: media_title");
     expect(template).toMatch(/id: media_title[\s\S]*?required: false/);
-  });
-
-  test("parses structured SDK output without text extraction", () => {
-    expect(parseStructuredModelResponse(response)).toEqual({
-      status: "confident",
-      reason: "extracted from URL",
-      mapping: {
-        type: "movie",
-        tmdbId: 980477,
-        title: "Model Title",
-        providers: [{ provider: "iqiyi", idString: "entityId=demo", url: "https://v.qq.com/x/cover/demo.html" }],
-      },
-    });
-  });
-
-  test("rejects provider idString values that cannot be parsed by the selected provider", () => {
-    expect(() =>
-      parseStructuredModelResponse({
-        status: "confident",
-        mapping: {
-          type: "tv",
-          tmdbId: 282136,
-          title: "Example Show",
-          providers: [{ season: 1, provider: "bilibili", idString: "ses_19657d109ffe84cBiE6WQ5Qjrv" }],
-        },
-      }),
-    ).toThrow("idString must be valid for the selected provider");
-  });
-
-  test("parses ambiguous structured SDK output", () => {
-    expect(parseStructuredModelResponse({ status: "ambiguous", reason: "two possible ids" })).toEqual({
-      status: "ambiguous",
-      reason: "two possible ids",
-    });
-  });
-
-  test("builds a prompt for provider-level season, range, offset, and ambiguity rules", () => {
-    const prompt = buildMappingPrompt(
-      {
-        media_type: "tv",
-        tmdb_url: "https://www.themoviedb.org/tv/95479",
-        season: 1,
-        platform_urls: ["https://www.bilibili.com/bangumi/play/ss34430"],
-      },
-      { title: "Jujutsu Kaisen", year: 2020 },
-    );
-
-    expect(prompt).toContain("provider-level season");
-    expect(prompt).toContain("inclusive TMDB episode range");
-    expect(prompt).toContain("epOffset defaults to 0");
-    expect(prompt).toContain("idString is opaque");
-    expect(prompt).toContain("return ambiguous");
-    expect(prompt).toContain("Do not infer split episode ranges");
   });
 });
 
@@ -566,65 +431,6 @@ describe("write safety helpers", () => {
 });
 
 describe("cli safe failure summary", () => {
-  test("writes error summary and sets exitCode=2 when issue body is invalid", async () => {
-    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tmdb-mapping-cli-"));
-    const issueBodyPath = path.join(tempDir, "issue-body.md");
-    const summaryPath = path.join(tempDir, "summary.json");
-    fs.writeFileSync(issueBodyPath, "### 媒体标题\n\nOnly title without required fields\n");
-
-    const mockedCreateOpencode = rs.mocked(createOpencode);
-    mockedCreateOpencode.mockReset();
-    mockedCreateOpencode.mockResolvedValueOnce(
-      mockOpenCodeClient({
-        create: rs.fn().mockResolvedValueOnce({ data: { id: "session-1" } }),
-        prompt: rs.fn().mockResolvedValueOnce({
-          data: {
-            info: {},
-          },
-        }),
-      }),
-    );
-
-    const previousModel = process.env.OPENCODE_MODEL;
-    const previousApiKey = process.env.OPENCODE_API_KEY;
-    process.env.OPENCODE_MODEL = "custom/model-a";
-    process.env.OPENCODE_API_KEY = "test-api-key";
-
-    try {
-      process.exitCode = undefined;
-      const result = await runMappingAgentCli([
-        "--issue",
-        "42",
-        "--issue-body-file",
-        issueBodyPath,
-        "--summary-file",
-        summaryPath,
-      ]);
-
-      expect(result.status).toBe("error");
-      expect(result.issueNumber).toBe(42);
-      expect(process.exitCode).toBe(2);
-
-      const summary = JSON.parse(fs.readFileSync(summaryPath, "utf8"));
-      expect(summary.status).toBe("error");
-      expect(summary.issueNumber).toBe(42);
-      expect(summary.message).toBe("OpenCode SDK response did not include structured output");
-      expect(summary.mappingTitle).toBeUndefined();
-      expect(summary.changedFiles).toBeUndefined();
-    } finally {
-      if (previousModel === undefined) {
-        delete process.env.OPENCODE_MODEL;
-      } else {
-        process.env.OPENCODE_MODEL = previousModel;
-      }
-      if (previousApiKey === undefined) {
-        delete process.env.OPENCODE_API_KEY;
-      } else {
-        process.env.OPENCODE_API_KEY = previousApiKey;
-      }
-    }
-  });
-
   test("writes error summary when issue-body-file cannot be read", async () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tmdb-mapping-cli-"));
     const summaryPath = path.join(tempDir, "summary.json");
@@ -661,13 +467,18 @@ describe("cli safe failure summary", () => {
 });
 
 describe("runMappingAgent integration", () => {
-  test("uses OpenCode fallback for unsupported provider URLs", async () => {
+  test("uses a session search/submit for unsupported provider URLs", async () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tmdb-mapping-run-"));
     const repoRoot = tempDir;
-    const dataPath = path.join(repoRoot, mappingDataRelativePath({ type: "movie", tmdbId: 999999 }));
-    const changesetDir = path.join(repoRoot, ".changeset");
+    const mapping = {
+      type: "movie" as const,
+      tmdbId: 999999,
+      title: "Mismatched Candidate",
+      providers: [{ provider: "iqiyi" as const, idString: "entityId=demo" }],
+    };
+    const dataPath = path.join(repoRoot, mappingDataRelativePath(mapping));
     fs.mkdirSync(path.dirname(dataPath), { recursive: true });
-    fs.mkdirSync(changesetDir, { recursive: true });
+    fs.mkdirSync(path.join(repoRoot, ".changeset"), { recursive: true });
 
     const issueBody = `### 媒体标题（可选）
 
@@ -686,46 +497,11 @@ https://example.com/watch/unknown-provider
       ({
         ok: true,
         json: async () => ({
-          name: "Example Show",
-          first_air_date: "2025-01-02",
+          title: "Mismatched Candidate",
+          release_date: "2025-01-02",
+          results: [],
         }),
       }) as Response;
-
-    const { mockedCreateOpencode, sessionPrompt } = mockIssueFieldExtraction({
-      media_title: undefined,
-      media_type: "tv",
-      tmdb_url: "https://www.themoviedb.org/tv/282136",
-      season: null,
-      platform_urls: ["https://example.com/watch/unknown-provider"],
-      notes: undefined,
-    });
-    const candidatePrompt = rs.fn().mockResolvedValueOnce({
-      data: {
-        info: {
-          structured: {
-            status: "confident",
-            mapping: {
-              type: "movie",
-              tmdbId: 999999,
-              title: "Mismatched Candidate",
-              providers: [
-                {
-                  provider: "iqiyi",
-                  idString: "entityId=demo",
-                  url: "https://example.com/watch/other-provider",
-                },
-              ],
-            },
-          },
-        },
-      },
-    });
-    mockedCreateOpencode.mockResolvedValueOnce(
-      mockOpenCodeClient({
-        create: rs.fn().mockResolvedValueOnce({ data: { id: "session-2" } }),
-        prompt: candidatePrompt,
-      }),
-    );
 
     const summary = await withMockedFetch(fetchImpl, () =>
       runMappingAgent({
@@ -733,11 +509,12 @@ https://example.com/watch/unknown-provider
         issueBody,
         repoRoot,
         summaryPath,
-        env: {
-          OPENCODE_MODEL: "custom/model-a",
-          OPENCODE_API_KEY: "test-api-key",
-          TMDB_ACCESS_TOKEN: "tmdb-token",
-        },
+        env: sessionEnv,
+        createSession: createFakeSession((customTools) =>
+          executeLoggedSubmit(customTools, mapping, async (tools) => {
+            await requireTool(tools, "search").execute("search", { query: "Mismatched Candidate" });
+          }),
+        ),
       }),
     );
 
@@ -746,16 +523,9 @@ https://example.com/watch/unknown-provider
       issueNumber: 42,
       mappingTitle: "Mismatched Candidate",
       mappingYear: 2025,
-      changedFiles: [mappingDataRelativePath({ type: "movie", tmdbId: 999999 }), ".changeset/tmdb-mapping-issue-42.md"],
+      changedFiles: [mappingDataRelativePath(mapping), ".changeset/tmdb-mapping-issue-42.md"],
       message: "TMDB mapping artifacts written for Mismatched Candidate",
     });
-
-    expect(mockedCreateOpencode).toHaveBeenCalledTimes(2);
-    expect(sessionPrompt).toHaveBeenCalledTimes(1);
-    expect(sessionPrompt.mock.calls[0][0].parts[0].text).toContain(issueBody);
-    expect(sessionPrompt.mock.calls[0][0].parts[0].text).toContain("媒体标题（可选）");
-    expect(candidatePrompt).toHaveBeenCalledTimes(1);
-    expect(candidatePrompt.mock.calls[0][0].parts[0].text).toContain('"season": 1');
 
     const summaryFile = JSON.parse(fs.readFileSync(summaryPath, "utf8"));
     expect(summaryFile).toEqual(summary);
@@ -773,10 +543,10 @@ https://example.com/watch/unknown-provider
     expect(fs.existsSync(dataPath)).toBe(true);
   });
 
-  test("resolves Bilibili episode URLs with OpenCode extraction", async () => {
+  test("resolves Bilibili episode URLs with a fake mapping session", async () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tmdb-mapping-run-"));
     const repoRoot = tempDir;
-    const dataPath = path.join(repoRoot, mappingDataRelativePath({ type: "tv", tmdbId: 282136 }));
+    const dataPath = path.join(repoRoot, mappingDataRelativePath(jiangyeMapping));
     fs.mkdirSync(path.dirname(dataPath), { recursive: true });
     fs.mkdirSync(path.join(repoRoot, ".changeset"), { recursive: true });
 
@@ -805,23 +575,8 @@ https://www.bilibili.com/bangumi/play/ep3409878
           json: async () => ({ name: "将夜", first_air_date: "2018-10-31" }),
         } as Response;
       }
-      if (url === "https://api.bilibili.com/pgc/view/web/season?ep_id=3409878") {
-        return {
-          ok: true,
-          json: async () => ({ result: { season_id: 45962 } }),
-        } as Response;
-      }
-      throw new Error(`unexpected fetch: ${url}`);
+      return { ok: false, status: 404, json: async () => ({}) } as Response;
     };
-
-    const { mockedCreateOpencode, sessionPrompt } = mockIssueFieldExtraction({
-      media_title: undefined,
-      media_type: "tv",
-      tmdb_url: "https://www.themoviedb.org/tv/282136",
-      season: 1,
-      platform_urls: ["https://www.bilibili.com/bangumi/play/ep3409878"],
-      notes: undefined,
-    });
 
     const summary = await withMockedFetch(fetchImpl, () =>
       runMappingAgent({
@@ -829,11 +584,8 @@ https://www.bilibili.com/bangumi/play/ep3409878
         issueBody,
         repoRoot,
         summaryPath,
-        env: {
-          OPENCODE_MODEL: "custom/model-a",
-          OPENCODE_API_KEY: "test-api-key",
-          TMDB_ACCESS_TOKEN: "tmdb-token",
-        },
+        env: sessionEnv,
+        createSession: createFakeSession((customTools) => executeLoggedSubmit(customTools, jiangyeMapping)),
       }),
     );
 
@@ -843,25 +595,47 @@ https://www.bilibili.com/bangumi/play/ep3409878
       mappingTitle: "将夜",
       mappingYear: 2018,
     });
-    expect(mockedCreateOpencode).toHaveBeenCalledTimes(1);
-    expect(sessionPrompt).toHaveBeenCalledTimes(1);
 
     const json = JSON.parse(fs.readFileSync(dataPath, "utf8"));
-    expect(json).toMatchObject({
-      type: "tv",
-      tmdbId: 282136,
-      title: "将夜",
-      providers: [{ season: 1, provider: "bilibili", idString: "seasonId=45962", epOffset: 0 }],
-    });
+    expect(json).toMatchObject(jiangyeMapping);
     expect(json).not.toHaveProperty("sourceUrl");
     expect(json).not.toHaveProperty("verifiedAt");
     expect("url" in json.providers[0]).toBe(false);
+    expect(fs.existsSync(path.join(repoRoot, ".changeset", "tmdb-mapping-issue-2.md"))).toBe(true);
   });
 
-  test("defaults missing TV season to season 1 for deterministic provider URLs", async () => {
+  test("replaces a submitted title with the get_tmdb title", async () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tmdb-mapping-run-"));
     const repoRoot = tempDir;
-    const dataPath = path.join(repoRoot, mappingDataRelativePath({ type: "tv", tmdbId: 282136 }));
+    const dataPath = path.join(repoRoot, mappingDataRelativePath(jiangyeMapping));
+    fs.mkdirSync(path.dirname(dataPath), { recursive: true });
+    fs.mkdirSync(path.join(repoRoot, ".changeset"), { recursive: true });
+    const fetchImpl: typeof fetch = async () =>
+      ({
+        ok: true,
+        json: async () => ({ name: "将夜", first_air_date: "2018-10-31" }),
+      }) as Response;
+
+    const summary = await withMockedFetch(fetchImpl, () =>
+      runMappingAgent({
+        issueNumber: 2,
+        issueBody: "https://www.themoviedb.org/tv/282136",
+        repoRoot,
+        env: sessionEnv,
+        createSession: createFakeSession((customTools) =>
+          executeLoggedSubmit(customTools, { ...jiangyeMapping, title: "错的" }),
+        ),
+      }),
+    );
+
+    expect(summary).toMatchObject({ status: "success", mappingTitle: "将夜" });
+    expect(JSON.parse(fs.readFileSync(dataPath, "utf8")).title).toBe("将夜");
+  });
+
+  test("defaults missing TV season to season 1 via submit_mapping", async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tmdb-mapping-run-"));
+    const repoRoot = tempDir;
+    const dataPath = path.join(repoRoot, mappingDataRelativePath(jiangyeMapping));
     fs.mkdirSync(path.dirname(dataPath), { recursive: true });
     fs.mkdirSync(path.join(repoRoot, ".changeset"), { recursive: true });
 
@@ -890,17 +664,8 @@ https://www.bilibili.com/bangumi/play/ss45962
           json: async () => ({ name: "将夜", first_air_date: "2018-10-31" }),
         } as Response;
       }
-      throw new Error(`unexpected fetch: ${url}`);
+      return { ok: false, status: 404, json: async () => ({}) } as Response;
     };
-
-    const { mockedCreateOpencode, sessionPrompt } = mockIssueFieldExtraction({
-      media_title: undefined,
-      media_type: "tv",
-      tmdb_url: "https://www.themoviedb.org/tv/282136",
-      season: null,
-      platform_urls: ["https://www.bilibili.com/bangumi/play/ss45962"],
-      notes: undefined,
-    });
 
     const summary = await withMockedFetch(fetchImpl, () =>
       runMappingAgent({
@@ -908,11 +673,8 @@ https://www.bilibili.com/bangumi/play/ss45962
         issueBody,
         repoRoot,
         summaryPath,
-        env: {
-          OPENCODE_MODEL: "custom/model-a",
-          OPENCODE_API_KEY: "test-api-key",
-          TMDB_ACCESS_TOKEN: "tmdb-token",
-        },
+        env: sessionEnv,
+        createSession: createFakeSession((customTools) => executeLoggedSubmit(customTools, jiangyeMapping)),
       }),
     );
 
@@ -922,23 +684,23 @@ https://www.bilibili.com/bangumi/play/ss45962
       mappingTitle: "将夜",
       mappingYear: 2018,
     });
-    expect(mockedCreateOpencode).toHaveBeenCalledTimes(1);
-    expect(sessionPrompt).toHaveBeenCalledTimes(1);
 
     const seasonJson = JSON.parse(fs.readFileSync(dataPath, "utf8"));
-    expect(seasonJson).toMatchObject({
-      type: "tv",
-      tmdbId: 282136,
-      title: "将夜",
-      providers: [{ season: 1, provider: "bilibili", idString: "seasonId=45962", epOffset: 0 }],
-    });
+    expect(seasonJson).toMatchObject(jiangyeMapping);
     expect("url" in seasonJson.providers[0]).toBe(false);
+    expect(fs.existsSync(path.join(repoRoot, ".changeset", "tmdb-mapping-issue-7.md"))).toBe(true);
   });
 
-  test("resolves MGTV drama URLs with OpenCode extraction", async () => {
+  test("resolves MGTV drama URLs with a fake mapping session", async () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tmdb-mapping-run-"));
     const repoRoot = tempDir;
-    const dataPath = path.join(repoRoot, mappingDataRelativePath({ type: "tv", tmdbId: 97199 }));
+    const mapping = {
+      type: "tv" as const,
+      tmdbId: 97199,
+      title: "妻子的浪漫旅行",
+      providers: [{ season: 6, provider: "mgtv" as const, idString: "dramaId=860862", epOffset: 0 }],
+    };
+    const dataPath = path.join(repoRoot, mappingDataRelativePath(mapping));
     fs.mkdirSync(path.dirname(dataPath), { recursive: true });
     fs.mkdirSync(path.join(repoRoot, ".changeset"), { recursive: true });
 
@@ -967,17 +729,8 @@ https://www.mgtv.com/h/860862.html
           json: async () => ({ name: "妻子的浪漫旅行", first_air_date: "2018-08-15" }),
         } as Response;
       }
-      throw new Error(`unexpected fetch: ${url}`);
+      return { ok: false, status: 404, json: async () => ({}) } as Response;
     };
-
-    const { mockedCreateOpencode, sessionPrompt } = mockIssueFieldExtraction({
-      media_title: undefined,
-      media_type: "tv",
-      tmdb_url: "https://www.themoviedb.org/tv/97199",
-      season: 6,
-      platform_urls: ["https://www.mgtv.com/h/860862.html"],
-      notes: undefined,
-    });
 
     const summary = await withMockedFetch(fetchImpl, () =>
       runMappingAgent({
@@ -985,11 +738,8 @@ https://www.mgtv.com/h/860862.html
         issueBody,
         repoRoot,
         summaryPath,
-        env: {
-          OPENCODE_MODEL: "custom/model-a",
-          OPENCODE_API_KEY: "test-api-key",
-          TMDB_ACCESS_TOKEN: "tmdb-token",
-        },
+        env: sessionEnv,
+        createSession: createFakeSession((customTools) => executeLoggedSubmit(customTools, mapping)),
       }),
     );
 
@@ -997,18 +747,151 @@ https://www.mgtv.com/h/860862.html
       status: "success",
       issueNumber: 6,
       mappingTitle: "妻子的浪漫旅行",
-      mappingYear: 2018,
     });
-    expect(mockedCreateOpencode).toHaveBeenCalledTimes(1);
-    expect(sessionPrompt).toHaveBeenCalledTimes(1);
 
     const mgtvJson = JSON.parse(fs.readFileSync(dataPath, "utf8"));
-    expect(mgtvJson).toMatchObject({
-      type: "tv",
-      tmdbId: 97199,
-      title: "妻子的浪漫旅行",
-      providers: [{ season: 6, provider: "mgtv", idString: "dramaId=860862", epOffset: 0 }],
-    });
+    expect(mgtvJson).toMatchObject(mapping);
     expect("url" in mgtvJson.providers[0]).toBe(false);
+    expect(fs.existsSync(path.join(repoRoot, ".changeset", "tmdb-mapping-issue-6.md"))).toBe(true);
+  });
+
+  test("discards mapping files the fake session writes before submit", async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tmdb-mapping-run-"));
+    const repoRoot = tempDir;
+    const strayRelative = path.join("packages", "tmdb-mapping-kit", "data", "tv", "999999.json");
+    const strayPath = path.join(repoRoot, strayRelative);
+    fs.mkdirSync(path.dirname(strayPath), { recursive: true });
+    fs.mkdirSync(path.join(repoRoot, ".changeset"), { recursive: true });
+
+    const fetchImpl: typeof fetch = async () =>
+      ({
+        ok: true,
+        json: async () => ({ name: "将夜", first_air_date: "2018-10-31" }),
+      }) as Response;
+
+    await withMockedFetch(fetchImpl, () =>
+      runMappingAgent({
+        issueNumber: 9,
+        issueBody: "https://www.themoviedb.org/tv/282136",
+        repoRoot,
+        env: sessionEnv,
+        createSession: createFakeSession(async (customTools) => {
+          fs.writeFileSync(strayPath, '{"type":"tv","tmdbId":999999}\n');
+          expect(fs.existsSync(strayPath)).toBe(true);
+          await executeLoggedSubmit(customTools, jiangyeMapping);
+        }),
+      }),
+    );
+
+    expect(fs.existsSync(strayPath)).toBe(false);
+  });
+
+  test("rejects confident submit after get_tmdb throws", async () => {
+    const fetchImpl: typeof fetch = async () => {
+      throw new Error("TMDB down");
+    };
+
+    const summary = await withMockedFetch(fetchImpl, () =>
+      runMappingAgent({
+        issueNumber: 42,
+        issueBody: "https://www.themoviedb.org/tv/282136",
+        repoRoot: fs.mkdtempSync(path.join(os.tmpdir(), "tmdb-mapping-run-")),
+        env: sessionEnv,
+        createSession: createFakeSession(async (customTools) => {
+          await requireTool(customTools, "get_tmdb")
+            .execute("get-tmdb", { tmdbId: 282136, type: "tv" })
+            .catch(() => undefined);
+          await requireTool(customTools, "submit_mapping").execute("submit", {
+            status: "confident",
+            mapping: jiangyeMapping,
+          });
+        }),
+      }),
+    );
+
+    expect(summary).toMatchObject({
+      status: "error",
+      message: "get_tmdb is required before a confident submit",
+    });
+  });
+
+  test("rejects confident submit when get_tmdb succeeds but probe and list_episodes fail", async () => {
+    const { listEpisodesTool } = await import("./mapping-agent-tools/provider.ts");
+    rs.mocked(listEpisodesTool).mockResolvedValue({ ok: false, error: "scrape failed" });
+
+    const fetchImpl: typeof fetch = async () =>
+      ({
+        ok: true,
+        json: async () => ({ name: "将夜", first_air_date: "2018-10-31" }),
+      }) as Response;
+
+    const summary = await withMockedFetch(fetchImpl, () =>
+      runMappingAgent({
+        issueNumber: 42,
+        issueBody: "https://www.themoviedb.org/tv/282136",
+        repoRoot: fs.mkdtempSync(path.join(os.tmpdir(), "tmdb-mapping-run-")),
+        env: sessionEnv,
+        createSession: createFakeSession(async (customTools) => {
+          await requireTool(customTools, "get_tmdb").execute("get-tmdb", {
+            tmdbId: jiangyeMapping.tmdbId,
+            type: jiangyeMapping.type,
+          });
+          await requireTool(customTools, "probe_mapping").execute("probe", { mapping: jiangyeMapping });
+          await requireTool(customTools, "list_episodes").execute("list", {
+            provider: "bilibili",
+            idString: "seasonId=45962",
+          });
+          await requireTool(customTools, "submit_mapping").execute("submit", {
+            status: "confident",
+            mapping: jiangyeMapping,
+          });
+        }),
+      }),
+    );
+
+    expect(summary).toMatchObject({
+      status: "error",
+      message: "probe_mapping or list_episodes is required before a confident submit",
+    });
+  });
+
+  test("rejects confident submit when probe evidence belongs to another mapping", async () => {
+    const fetchImpl: typeof fetch = async () =>
+      ({
+        ok: true,
+        json: async () => ({ name: "将夜", first_air_date: "2018-10-31" }),
+      }) as Response;
+
+    const summary = await withMockedFetch(fetchImpl, () =>
+      runMappingAgent({
+        issueNumber: 42,
+        issueBody: "https://www.themoviedb.org/tv/282136",
+        repoRoot: fs.mkdtempSync(path.join(os.tmpdir(), "tmdb-mapping-run-")),
+        env: sessionEnv,
+        createSession: createFakeSession(async (customTools) => {
+          await requireTool(customTools, "get_tmdb").execute("get-tmdb", {
+            tmdbId: jiangyeMapping.tmdbId,
+            type: jiangyeMapping.type,
+          });
+          await requireTool(customTools, "probe_mapping").execute("probe", {
+            mapping: {
+              type: "movie",
+              tmdbId: 1,
+              title: "Demo",
+              providers: [{ provider: "iqiyi", idString: "entityId=demo" }],
+            },
+          });
+          await requireTool(customTools, "submit_mapping").execute("submit", {
+            status: "confident",
+            mapping: jiangyeMapping,
+          });
+        }),
+      }),
+    );
+
+    expect(summary).toMatchObject({
+      status: "error",
+      message: "probe_mapping or list_episodes is required before a confident submit",
+    });
   });
 });

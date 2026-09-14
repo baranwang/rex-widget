@@ -26,16 +26,17 @@
     "test": "rstest"
   },
   "devDependencies": {
+    "@rexnow/scraper-kit": "workspace:^",
     "@rslib/core": "^0.21.5",
     "@rstest/adapter-rslib": "^0.2.2",
     "@rstest/core": "^0.9.10",
-    "@rexnow/scraper-kit": "workspace:^",
     "@types/node": "^24.12.4",
     "rsbuild-plugin-protobufjs": "^0.1.0",
     "typescript": "^6.0.3"
   },
   "dependencies": {
-    "@opencode-ai/sdk": "^1.15.3",
+    "@earendil-works/pi-coding-agent": "^0.85.1",
+    "typebox": "^1.3.30",
     "zod": "4.0.17"
   }
 }

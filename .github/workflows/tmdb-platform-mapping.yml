@@ -142,12 +142,6 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh issue view "$ISSUE_NUMBER" --json body --jq .body > "$ISSUE_BODY_FILE"
 
-      - name: Install OpenCode
-        if: ${{ steps.gates.outputs.can_proceed == 'true' && steps.idempotency.outputs.already_processed != 'true' }}
-        run: |
-          curl -fsSL https://opencode.ai/install | bash
-          echo "$HOME/.opencode/bin" >> "$GITHUB_PATH"
-
       - name: Build mapping agent workspace dependencies
         if: ${{ steps.gates.outputs.can_proceed == 'true' && steps.idempotency.outputs.already_processed != 'true' }}
         run: pnpm --filter @rexnow/scraper-kit... build
@@ -157,6 +151,10 @@ jobs:
         if: ${{ steps.gates.outputs.can_proceed == 'true' && steps.idempotency.outputs.already_processed != 'true' }}
         continue-on-error: true
         env:
+          PI_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+          PI_BASE_URL: ${{ secrets.OPENCODE_BASE_URL }}
+          PI_MODEL: gpt-5.4-mini
+          PI_PROVIDER: openai
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
           OPENCODE_BASE_URL: ${{ secrets.OPENCODE_BASE_URL }}
           OPENCODE_MODEL: gpt-5.4-mini
