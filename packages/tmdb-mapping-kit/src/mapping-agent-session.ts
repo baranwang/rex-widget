@@ -93,7 +93,8 @@ export function restoreMappingWorkspace(repoRoot: string, snapshot: MappingWorks
 function wrapCustomTools(tools: ReturnType<typeof createMappingTools>) {
   return tools.map((tool) => ({
     name: tool.name,
-    execute: async (toolCallId: string, params: unknown) => tool.execute(toolCallId, params as never),
+    execute: async (toolCallId: string, params: unknown) =>
+      tool.execute(toolCallId, params as never, undefined, undefined, undefined as never),
   }));
 }
 

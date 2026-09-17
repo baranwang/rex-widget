@@ -49,35 +49,35 @@ export async function parseProviderUrlTool(url: string) {
   try {
     const parsed = await parseProviderUrl(url);
     if (!parsed) {
-      return { ok: false, error: "could not parse provider URL" };
+      return { ok: false as const, error: "could not parse provider URL" };
     }
-    return { ok: true, provider: parsed.provider, idString: parsed.idString, id: parsed.id };
+    return { ok: true as const, provider: parsed.provider, idString: parsed.idString, id: parsed.id };
   } catch (error) {
-    return { ok: false, error: errorMessage(error) };
+    return { ok: false as const, error: errorMessage(error) };
   }
 }
 
 export function parseIdStringTool(provider: string, idString: string) {
   if (!isProviderName(provider)) {
-    return { ok: false, error: `unknown provider: ${provider}` };
+    return { ok: false as const, error: `unknown provider: ${provider}` };
   }
   try {
     const id = parseProviderIdStringFor(provider, idString);
-    return { ok: true, id };
+    return { ok: true as const, id };
   } catch (error) {
-    return { ok: false, error: errorMessage(error) };
+    return { ok: false as const, error: errorMessage(error) };
   }
 }
 
 export function makeIdStringTool(provider: string, id: Record<string, unknown>) {
   if (!isProviderName(provider)) {
-    return { ok: false, error: `unknown provider: ${provider}` };
+    return { ok: false as const, error: `unknown provider: ${provider}` };
   }
   try {
     const idString = generateProviderIdString(provider, id);
-    return { ok: true, idString };
+    return { ok: true as const, idString };
   } catch (error) {
-    return { ok: false, error: errorMessage(error) };
+    return { ok: false as const, error: errorMessage(error) };
   }
 }
 
@@ -101,7 +101,7 @@ export async function listEpisodesTool(
 ) {
   const { provider, idString, episodeNumber, episodeName, airDate } = input;
   if (!isProviderName(provider)) {
-    return { ok: false, error: `unknown provider: ${provider}` };
+    return { ok: false as const, error: `unknown provider: ${provider}` };
   }
   try {
     const context = episodeName !== undefined || airDate !== undefined ? { episodeName, airDate } : undefined;
@@ -112,8 +112,8 @@ export async function listEpisodesTool(
       .slice(0, MAX_EPISODES)
       .map((episode) => mapEpisode(episode))
       .filter((episode): episode is ProviderEpisodeInfo => episode !== undefined);
-    return { ok: true, episodes };
+    return { ok: true as const, episodes };
   } catch (error) {
-    return { ok: false, error: errorMessage(error) };
+    return { ok: false as const, error: errorMessage(error) };
   }
 }
