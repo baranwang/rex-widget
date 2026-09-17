@@ -66,11 +66,21 @@ type ProbeRouting = {
   epOffset?: number;
 };
 
-type ProbeResult = (
-  | { provider: string; idString: string; ok: true; episodes: Awaited<ReturnType<typeof listEpisodesTool>>["episodes"] }
-  | { provider: string; idString: string; ok: false; error: string }
-) &
-  ProbeRouting;
+type ProbeOk = {
+  provider: string;
+  idString: string;
+  ok: true;
+  episodes: Extract<Awaited<ReturnType<typeof listEpisodesTool>>, { ok: true }>["episodes"];
+} & ProbeRouting;
+
+type ProbeFail = {
+  provider: string;
+  idString: string;
+  ok: false;
+  error: string;
+} & ProbeRouting;
+
+type ProbeResult = ProbeOk | ProbeFail;
 
 function routingFromProvider(provider: CanonicalMapping["providers"][number]): ProbeRouting {
   if (!("season" in provider)) {

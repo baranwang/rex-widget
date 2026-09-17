@@ -114,7 +114,7 @@ export function createMappingTools(options: {
       provider: Type.String(),
       idString: Type.String(),
     }),
-    execute(_toolCallId, params) {
+    async execute(_toolCallId, params) {
       onTool("parse_id_string");
       const result = parseIdStringTool(params.provider, params.idString);
       return toolResult(result);
@@ -129,7 +129,7 @@ export function createMappingTools(options: {
       provider: Type.String(),
       id: Type.Record(Type.String(), Type.Unknown()),
     }),
-    execute(_toolCallId, params) {
+    async execute(_toolCallId, params) {
       onTool("make_id_string");
       const result = makeIdStringTool(params.provider, params.id);
       return toolResult(result);
@@ -143,7 +143,7 @@ export function createMappingTools(options: {
     parameters: Type.Object({
       title: Type.String(),
     }),
-    execute(_toolCallId, params) {
+    async execute(_toolCallId, params) {
       onTool("parse_episode_title");
       const result = parseEpisodeTitleTool(params.title);
       return toolResult(result);
@@ -163,7 +163,7 @@ export function createMappingTools(options: {
     }),
     async execute(_toolCallId, params) {
       const result = await listEpisodesTool(params);
-      if (result.ok === true) {
+      if (result.ok) {
         onTool("list_episodes", {
           listEpisodes: {
             provider: params.provider,
@@ -185,7 +185,7 @@ export function createMappingTools(options: {
       type: Type.Union([Type.Literal("movie"), Type.Literal("tv")]),
       tmdbId: Type.Number(),
     }),
-    execute(_toolCallId, params) {
+    async execute(_toolCallId, params) {
       onTool("list_existing_mapping");
       const result = listExistingMapping(repoRoot, params);
       return toolResult(result);
@@ -199,7 +199,7 @@ export function createMappingTools(options: {
     parameters: Type.Object({
       mapping: Type.Unknown({ description: "Canonical mapping JSON" }),
     }),
-    execute(_toolCallId, params) {
+    async execute(_toolCallId, params) {
       onTool("preview_merge");
       const result = previewMerge(repoRoot, params.mapping as CanonicalMapping);
       return toolResult(result);
@@ -246,7 +246,7 @@ export function createMappingTools(options: {
       mapping: Type.Optional(Type.Unknown()),
       reason: Type.Optional(Type.String()),
     }),
-    execute(_toolCallId, params) {
+    async execute(_toolCallId, params) {
       onTool("submit_mapping");
       const value = parseSubmitMapping(params);
       onSubmit(value);
