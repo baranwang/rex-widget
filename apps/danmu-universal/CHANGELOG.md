@@ -1,5 +1,12 @@
 # @rexnow/danmu-universal
 
+## 0.16.1
+
+### Patch Changes
+
+- bd5f91a: Add TMDB local mapping for 诛仙.
+- 882f6c0: Add TMDB local mapping for 诛仙.
+
 ## 0.16.0
 
 ### Minor Changes
