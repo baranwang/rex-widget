@@ -165,6 +165,8 @@ describe("mappingGatewayRegistration", () => {
       api: "openai-completions",
       reasoning: false,
     });
+    expect(registration.model.compat).toEqual({ sendSessionAffinityHeaders: true });
+    expect(registration.config.compat).toEqual({ sendSessionAffinityHeaders: true });
   });
 
   test("keeps named providers when they are not openai", () => {

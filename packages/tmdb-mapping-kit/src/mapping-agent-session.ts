@@ -106,6 +106,7 @@ const openaiCompatibleProviderId = "openai-compatible";
 export function mappingGatewayRegistration(selection: ReturnType<typeof mappingModelSelection>) {
   const providerId = selection.providerID === "openai" ? openaiCompatibleProviderId : selection.providerID;
   const baseUrl = selection.baseUrl || "https://api.openai.com/v1";
+  const compat = { sendSessionAffinityHeaders: true };
   const modelDef = {
     id: selection.modelID,
     name: selection.modelID,
@@ -115,14 +116,16 @@ export function mappingGatewayRegistration(selection: ReturnType<typeof mappingM
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
     contextWindow: 128000,
     maxTokens: 8192,
+    compat,
   };
   return {
     providerId,
-    model: { ...modelDef, provider: providerId, baseUrl },
+    model: { ...modelDef, provider: providerId, baseUrl, compat },
     config: {
       name: providerId === openaiCompatibleProviderId ? "OpenAI-compatible" : providerId,
       baseUrl,
       api: "openai-completions" as const,
+      compat,
       models: [modelDef],
     },
   };
