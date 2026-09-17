@@ -151,14 +151,10 @@ jobs:
         if: ${{ steps.gates.outputs.can_proceed == 'true' && steps.idempotency.outputs.already_processed != 'true' }}
         continue-on-error: true
         env:
-          PI_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
-          PI_BASE_URL: ${{ secrets.OPENCODE_BASE_URL }}
-          PI_MODEL: gpt-5.4-mini
-          PI_PROVIDER: openai
-          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
-          OPENCODE_BASE_URL: ${{ secrets.OPENCODE_BASE_URL }}
-          OPENCODE_MODEL: gpt-5.4-mini
-          OPENCODE_PROVIDER: openai
+          PI_API_KEY: ${{ secrets.PI_API_KEY }}
+          PI_BASE_URL: ${{ secrets.PI_BASE_URL }}
+          PI_MODEL: ${{ vars.PI_MODEL }}
+          PI_PROVIDER: ${{ vars.PI_PROVIDER }}
           TMDB_ACCESS_TOKEN: ${{ secrets.TMDB_ACCESS_TOKEN }}
           TMDB_LANGUAGE: zh-CN
           ISSUE_NUMBER: ${{ github.event.issue.number }}
