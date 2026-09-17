@@ -3,7 +3,13 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, rs, test } from "@rstest/core";
 import { runMappingAgent } from "./mapping-agent.ts";
-import { restoreMappingWorkspace, runPiMappingSession, snapshotMappingWorkspace } from "./mapping-agent-session.ts";
+import {
+  mappingGatewayRegistration,
+  mappingSessionFailure,
+  restoreMappingWorkspace,
+  runPiMappingSession,
+  snapshotMappingWorkspace,
+} from "./mapping-agent-session.ts";
 
 rs.mock("./mapping-agent-tools/provider.ts", () => ({
   listEpisodesTool: rs.fn(async () => ({
@@ -111,6 +117,73 @@ describe("runPiMappingSession", () => {
         };
       },
     });
+  });
+
+  test("surfaces assistant errors instead of a missing submit_mapping", async () => {
+    await expect(
+      runPiMappingSession({
+        issueNumber: 42,
+        issueBody: "body",
+        repoRoot: tempRepo(),
+        env: sessionEnv,
+        createSession: async () => ({
+          session: {
+            subscribe: () => () => {},
+            prompt: async () => {},
+            abort: async () => {},
+            dispose: () => {},
+            messages: [{ role: "assistant", stopReason: "error", errorMessage: "Unknown provider: openai" }],
+          },
+        }),
+      }),
+    ).rejects.toThrow("Unknown provider: openai");
+  });
+});
+
+describe("mappingGatewayRegistration", () => {
+  test("keeps custom openai-compatible gateways off the builtin openai provider", () => {
+    const registration = mappingGatewayRegistration({
+      providerID: "openai",
+      modelID: "grok-4.6",
+      apiKey: "k",
+      baseUrl: "https://gateway.example/v1",
+    });
+    expect(registration.providerId).toBe("openai-compatible");
+    expect(registration.model).toMatchObject({
+      id: "grok-4.6",
+      provider: "openai-compatible",
+      api: "openai-completions",
+      baseUrl: "https://gateway.example/v1",
+    });
+    expect(registration.config).toMatchObject({
+      name: "OpenAI-compatible",
+      baseUrl: "https://gateway.example/v1",
+      api: "openai-completions",
+    });
+    expect(registration.config.models?.[0]).toMatchObject({
+      id: "grok-4.6",
+      api: "openai-completions",
+      reasoning: false,
+    });
+  });
+
+  test("keeps named providers when they are not openai", () => {
+    expect(mappingGatewayRegistration({ providerID: "xai", modelID: "grok-4.6", apiKey: "k" }).providerId).toBe("xai");
+  });
+});
+
+describe("mappingSessionFailure", () => {
+  test("prefers the assistant error over a missing submit_mapping", () => {
+    expect(
+      mappingSessionFailure({
+        submitted: undefined,
+        messages: [{ role: "assistant", stopReason: "error", errorMessage: "Unknown provider: openai" }],
+      }),
+    ).toBe("Unknown provider: openai");
+  });
+
+  test("falls back when the agent never submitted", () => {
+    expect(mappingSessionFailure({ submitted: undefined, messages: [] })).toBe("agent did not call submit_mapping");
   });
 });
 

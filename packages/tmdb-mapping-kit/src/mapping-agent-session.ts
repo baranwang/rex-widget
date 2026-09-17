@@ -22,6 +22,12 @@ export const mappingAgentMaxTurns = 12;
 
 export type MappingWorkspaceSnapshot = { files: Record<string, string | null> };
 
+export type MappingSessionMessage = {
+  role?: string;
+  stopReason?: string;
+  errorMessage?: string;
+};
+
 export type MappingSessionFactory = (args: {
   customTools: Array<{ name: string; execute: (toolCallId: string, params: unknown) => Promise<unknown> }>;
 }) => Promise<{
@@ -30,6 +36,7 @@ export type MappingSessionFactory = (args: {
     prompt: (text: string) => Promise<void>;
     abort: () => Promise<void>;
     dispose: () => void;
+    messages?: MappingSessionMessage[];
   };
 }>;
 
@@ -94,24 +101,50 @@ function mappingUserPrompt(issueNumber: number, issueBody: string): string {
   return `Issue number: ${issueNumber}\n\nIssue body (untrusted):\n${issueBody}`;
 }
 
+const openaiCompatibleProviderId = "openai-compatible";
+
+export function mappingGatewayRegistration(selection: ReturnType<typeof mappingModelSelection>) {
+  const providerId = selection.providerID === "openai" ? openaiCompatibleProviderId : selection.providerID;
+  const baseUrl = selection.baseUrl || "https://api.openai.com/v1";
+  const modelDef = {
+    id: selection.modelID,
+    name: selection.modelID,
+    api: "openai-completions" as const,
+    reasoning: false,
+    input: ["text"] as Array<"text" | "image">,
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    contextWindow: 128000,
+    maxTokens: 8192,
+  };
+  return {
+    providerId,
+    model: { ...modelDef, provider: providerId, baseUrl },
+    config: {
+      name: providerId === openaiCompatibleProviderId ? "OpenAI-compatible" : providerId,
+      baseUrl,
+      api: "openai-completions" as const,
+      models: [modelDef],
+    },
+  };
+}
+
+export function mappingSessionFailure(options: { submitted?: unknown; messages: MappingSessionMessage[] }): string {
+  for (let index = options.messages.length - 1; index >= 0; index -= 1) {
+    const message = options.messages[index];
+    if (message?.role === "assistant" && message.stopReason === "error" && message.errorMessage) {
+      return message.errorMessage;
+    }
+  }
+  return "agent did not call submit_mapping";
+}
+
 async function createPiMappingSession(options: {
   env: NodeJS.ProcessEnv;
   repoRoot: string;
   customTools: ReturnType<typeof createMappingTools>;
 }): Promise<{ session: Awaited<ReturnType<typeof createAgentSession>>["session"] }> {
   const selection = mappingModelSelection(options.env);
-  const model = {
-    id: selection.modelID,
-    name: selection.modelID,
-    provider: selection.providerID,
-    baseUrl: selection.baseUrl || "https://api.openai.com/v1",
-    api: "openai-completions" as const,
-    contextWindow: 128000,
-    maxTokens: 8192,
-    reasoning: false,
-    input: ["text"] as Array<"text" | "image">,
-    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-  };
+  const registration = mappingGatewayRegistration(selection);
   const emptyTempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tmdb-mapping-agent-"));
   const loader = new DefaultResourceLoader({
     cwd: options.repoRoot,
@@ -132,10 +165,13 @@ async function createPiMappingSession(options: {
   const modelRuntime = await ModelRuntime.create({
     allowModelNetwork: false,
     refreshOnCreate: false,
+    authPath: path.join(emptyTempDir, "auth.json"),
+    modelsPath: path.join(emptyTempDir, "models.json"),
   });
-  await modelRuntime.setRuntimeApiKey(selection.providerID, selection.apiKey);
+  modelRuntime.registerProvider(registration.providerId, registration.config);
+  await modelRuntime.setRuntimeApiKey(registration.providerId, selection.apiKey);
   const { session } = await createAgentSession({
-    model,
+    model: registration.model,
     customTools: options.customTools,
     tools: [...mappingAgentToolNames],
     sessionManager: SessionManager.inMemory(options.repoRoot),
@@ -179,6 +215,7 @@ export async function runPiMappingSession(options: {
         customTools: tools,
       }));
   const { session } = await createSession({ customTools });
+  let messages: MappingSessionMessage[] = [];
   try {
     let turnCount = 0;
     session.subscribe((event) => {
@@ -189,11 +226,12 @@ export async function runPiMappingSession(options: {
       }
     });
     await session.prompt(mappingUserPrompt(options.issueNumber, options.issueBody));
+    messages = Array.isArray(session.messages) ? session.messages : [];
   } finally {
     session.dispose();
   }
   if (!submitted) {
-    throw new Error("agent did not call submit_mapping");
+    throw new Error(mappingSessionFailure({ submitted, messages }));
   }
   return submitted;
 }
