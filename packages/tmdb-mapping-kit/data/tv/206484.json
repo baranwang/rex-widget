@@ -1,0 +1,13 @@
+{
+  "type": "tv",
+  "tmdbId": 206484,
+  "title": "诛仙",
+  "providers": [
+    {
+      "season": 3,
+      "provider": "tencent",
+      "idString": "cid=mzc00200z195unq&vid=i4101vrl7tu",
+      "epOffset": 0
+    }
+  ]
+}
