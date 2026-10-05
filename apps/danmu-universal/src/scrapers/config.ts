@@ -5,7 +5,10 @@ export type { Unflatten } from "@rexnow/scraper-kit";
 
 const appGlobalParamsConfigSchema = z
   .object({
-    "global.content.preserveDanmakuColor": z.stringbool().catch(true),
+    "global.content.preserveDanmakuColor": z
+      .enum(["true", "false"])
+      .catch("true")
+      .transform((value) => value === "true"),
   })
   .transform((value) => ({
     global: {

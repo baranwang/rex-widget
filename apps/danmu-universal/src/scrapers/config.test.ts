@@ -8,6 +8,11 @@ describe("preserveDanmakuColor config", () => {
     [{ "global.content.preserveDanmakuColor": "false" }, false],
     [{ "global.content.preserveDanmakuColor": "invalid" }, true],
     [{ "global.content.preserveDanmakuColor": false }, true],
+    [{ "global.content.preserveDanmakuColor": "off" }, true],
+    [{ "global.content.preserveDanmakuColor": "0" }, true],
+    [{ "global.content.preserveDanmakuColor": "FALSE" }, true],
+    [{ "global.content.preserveDanmakuColor": null }, true],
+    [{ "global.content.preserveDanmakuColor": ["false"] }, true],
   ])("parses preserveDanmakuColor from %j as %s", (input, expected) => {
     expect(globalParamsConfigSchema.parse(input).global.content.preserveDanmakuColor).toBe(expected);
   });
