@@ -1,6 +1,6 @@
 import { createScraperRegistry, type EpisodeMatchContext, type ScraperProviderMap } from "@rexnow/scraper-kit";
 import { isEqual, sortBy, uniqWith } from "es-toolkit";
-import { MediaType } from "../libs/constants";
+import { DEFAULT_COLOR_INT, MediaType } from "../libs/constants";
 import { QihooMatcher } from "../matchers/360kan";
 import type {
   BaseScraper,
@@ -141,9 +141,10 @@ export class Scraper {
       if (conversionConverter) {
         content = conversionConverter(content);
       }
+      const color = this.globalParams.global.content.preserveDanmakuColor ? item.color : DEFAULT_COLOR_INT;
       comments.push({
         cid: item.id,
-        p: `${item.timestamp.toFixed(2)},${item.mode},${item.color},[${provider}]` as CommentItem["p"],
+        p: `${item.timestamp.toFixed(2)},${item.mode},${color},[${provider}]` as CommentItem["p"],
         m: content,
       });
     });
