@@ -124,6 +124,23 @@ WidgetMetadata = {
       ],
     },
     {
+      title: "保留弹幕颜色",
+      name: "global.content.preserveDanmakuColor",
+      description: "关闭后，弹幕颜色跟随系统设置",
+      value: "true",
+      type: "enumeration",
+      enumOptions: [
+        {
+          title: "开启",
+          value: "true",
+        },
+        {
+          title: "关闭",
+          value: "false",
+        },
+      ],
+    },
+    {
       title: "弹幕内容繁简转换",
       name: "global.content.conversion",
       value: "original",
@@ -411,5 +428,22 @@ if (import.meta.rstest) {
     expect(typeof searchDanmu).toBe("function");
     expect(typeof getDetail).toBe("function");
     expect(typeof getComments).toBe("function");
+  });
+
+  test("注册保留弹幕颜色开关", () => {
+    const option = WidgetMetadata.globalParams?.find((param) => param.name === "global.content.preserveDanmakuColor");
+
+    expect(option).toMatchObject({
+      title: "保留弹幕颜色",
+      name: "global.content.preserveDanmakuColor",
+      description: "关闭后，弹幕颜色跟随系统设置",
+      value: "true",
+      type: "enumeration",
+      enumOptions: [
+        { title: "开启", value: "true" },
+        { title: "关闭", value: "false" },
+      ],
+    });
+    expect(option?.belongTo).toBeUndefined();
   });
 }
