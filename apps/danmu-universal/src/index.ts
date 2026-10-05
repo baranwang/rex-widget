@@ -126,7 +126,7 @@ WidgetMetadata = {
     {
       title: "保留弹幕颜色",
       name: "global.content.preserveDanmakuColor",
-      description: "关闭后，弹幕颜色跟随系统设置",
+      description: "关闭后，弹幕统一显示为白色",
       value: "true",
       type: "enumeration",
       enumOptions: [
@@ -436,7 +436,7 @@ if (import.meta.rstest) {
     expect(option).toMatchObject({
       title: "保留弹幕颜色",
       name: "global.content.preserveDanmakuColor",
-      description: "关闭后，弹幕颜色跟随系统设置",
+      description: "关闭后，弹幕统一显示为白色",
       value: "true",
       type: "enumeration",
       enumOptions: [

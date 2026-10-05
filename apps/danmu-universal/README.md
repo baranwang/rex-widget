@@ -37,6 +37,10 @@ https://unpkg.com/@rexnow/danmu-universal
 https://unpkg.com/@rexnow/danmu-universal/lite 
 ```
 
+### 弹幕颜色设置
+
+完整版和精简版均提供「保留弹幕颜色」开关，默认开启并保留弹幕原色。关闭后，所有弹幕统一显示为白色。
+
 ## 开发
 
 项目自豪的使用 [rex-widget-libs](https://github.com/baranwang/rex-widget-libs) 开发工具链

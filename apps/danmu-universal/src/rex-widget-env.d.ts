@@ -26,7 +26,7 @@ namespace BaranwangDanmuUniversal {
     "global.content.aggregation": "true" | "false";
     /**
      * 保留弹幕颜色
-     * @description 关闭后，弹幕颜色跟随系统设置
+     * @description 关闭后，弹幕统一显示为白色
      * @default 'true'
      */
     "global.content.preserveDanmakuColor": "true" | "false";
