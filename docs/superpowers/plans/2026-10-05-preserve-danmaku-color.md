@@ -67,9 +67,9 @@
 - Produces: 应用导出的 `globalParamsConfigSchema`，输出新增 `global.content.preserveDanmakuColor: boolean`；`GlobalParamsConfig = z.infer<typeof globalParamsConfigSchema>`。
 - Produces: 宿主参数 `"global.content.preserveDanmakuColor": "true" | "false"`，不更改 `Scraper.setGlobalParams(params: BaranwangDanmuUniversal.GlobalParams)` 签名。
 
-- [ ] **Step 1: 添加失败的配置测试及元数据内联测试**
+- [x] **Step 1: 添加失败的配置测试及元数据内联测试**
 
-配置测试导入本地 `./config`，用 `test.each` 验证 `{}`、`"true"`、`"false"`、`"invalid"` 和 boolean `false` 分别解析成 `true`、`true`、`false`、`true`、`true`。核心断言：
+配置测试导入本地 `./config`，用 `test.each` 验证 `{}`、`"true"`、`"false"`、`"invalid"` 和 boolean `false` 分别解析成 `true`、`true`、`false`、`true`、`true`；最终审查补充 `"off"`、`"0"`、`"FALSE"`、`null` 和数组输入，全部回退为 `true`。核心断言：
 
 ```ts
 expect(globalParamsConfigSchema.parse(input).global.content.preserveDanmakuColor).toBe(expected);
@@ -94,23 +94,23 @@ expect(option).toMatchObject({
 expect(option?.belongTo).toBeUndefined();
 ```
 
-- [ ] **Step 2: 验证测试失败**
+- [x] **Step 2: 验证测试失败**
 
 Run: `pnpm --filter @rexnow/danmu-universal exec rstest run src/scrapers/config.test.ts src/index.ts -t 'preserveDanmakuColor|保留弹幕颜色'`
 
 测试名使用上述关键字。Expected: 因缺失新配置输出和元数据失败，不能是环境错误。
 
-- [ ] **Step 3: 实现配置、声明和元数据**
+- [x] **Step 3: 实现配置、声明和元数据**
 
-在本地 `config.ts` 将共享 schema 重命名导入，与应用独有的 Zod schema 用 `z.intersection` 合并。新 schema 解析扁平键 `global.content.preserveDanmakuColor`（`z.stringbool().catch(true)`），transform 输出 `{ global: { content: { preserveDanmakuColor: boolean } } }`；交集保留全部共享字段。保持 `Unflatten` 类型转导出，并从合并后的 schema 推导 `GlobalParamsConfig`。
+在本地 `config.ts` 将共享 schema 重命名导入，与应用独有的 Zod schema 用 `z.intersection` 合并。新 schema 解析扁平键 `global.content.preserveDanmakuColor`（`z.enum(["true", "false"]).catch("true").transform(value => value === "true")`），transform 输出 `{ global: { content: { preserveDanmakuColor: boolean } } }`；交集保留全部共享字段。保持 `Unflatten` 类型转导出，并从合并后的 schema 推导 `GlobalParamsConfig`。
 
 在元数据「弹幕内容聚合」之后加入 Step 1 指定的选项，不设置 `belongTo`；在宿主 `GlobalParams` 中增加同名参数和对应说明、默认值。
 
-- [ ] **Step 4: 验证配置和元数据测试通过**
+- [x] **Step 4: 验证配置和元数据测试通过**
 
 Run: Step 2 的命令。Expected: 所有选中的测试通过。
 
-- [ ] **Step 5: 提交该任务**
+- [x] **Step 5: 提交该任务**
 
 只 stage 本任务四个文件，使用 `feat(danmu): add preserve color setting`，footer 为 `Co-authored-by: Codex <noreply@openai.com>`。
 
@@ -130,7 +130,7 @@ Run: Step 2 的命令。Expected: 所有选中的测试通过。
 - Exercises: `Scraper.setGlobalParams(params: BaranwangDanmuUniversal.GlobalParams)` 和 `Scraper.getDanmuWithSegmentTimeByVideoId(id: string, segmentTime: number): Promise<CommentItem[]>`。
 - Produces: 不变的 `CommentItem[]` 接口，`p` 的第三个逗号分隔字段遵循颜色开关。
 
-- [ ] **Step 1: 添加公开路径的失败测试**
+- [x] **Step 1: 添加公开路径的失败测试**
 
 新建 `Scraper`，替换实例 `scraperMap.tencent` / `scraperMap.bilibili` 的 `getSegments` 为返回 `[{ provider: 对应平台名, segmentId: "s1", startTime: 0 }]` 的固定切片，`getComments` 返回固定对象；无需请求网络。每个用例先 `setGlobalParams`，旧配置使用 `{}` 类型断言模拟宿主缺失字段。替换方法在 `finally` 恢复。
 
@@ -142,27 +142,27 @@ Run: Step 2 的命令。Expected: 所有选中的测试通过。
 - `preserveDanmakuColor preserves aggregation groups`：两条红色同文同模式弹幕，时间 `2` / `1`；另有一条蓝色同文同模式弹幕，时间 `3`。聚合开启时，不论颜色开关，均得到两条，文本分别为 `"相同文本 × 2"` 和 `"相同文本"`，时间分别为 `"1.00"` 和 `"3.00"`；聚合关闭时得到三条且无计数后缀。
 - `preserveDanmakuColor keeps empty and partial-success behavior`：空切片返回 `[]`；腾讯抓取抛错而哔哩哔哩成功时仍返回后者弹幕，关闭时为白色。
 
-- [ ] **Step 2: 验证颜色测试失败**
+- [x] **Step 2: 验证颜色测试失败**
 
 Run: `pnpm --filter @rexnow/danmu-universal exec rstest run src/scrapers/comment-color.test.ts`
 
 Expected: 关闭颜色的用例因仍输出原色失败；默认及其他原有行为可以通过。
 
-- [ ] **Step 3: 实现输出策略**
+- [x] **Step 3: 实现输出策略**
 
 同步 `index.ts` 元数据、内联测试和 `rex-widget-env.d.ts` 的说明为 `关闭后，弹幕统一显示为白色`。在 `getSegmentWithTime` 最终序列化时，开启使用 `item.color`，关闭使用 `DEFAULT_COLOR_INT`；只替换 `p` 中的颜色值，保持方法签名、聚合键及计数逻辑不变。无需新增 helper 或调整抓取器。
 
-- [ ] **Step 4: 验证颜色测试及相关本地回归**
+- [x] **Step 4: 验证颜色测试及相关本地回归**
 
 Run: `pnpm --filter @rexnow/danmu-universal exec rstest run src/scrapers/comment-color.test.ts src/scrapers/config.test.ts src/scrapers/episode-context.test.ts src/index.ts`
 
 Expected: 所有选中文件测试通过；测试不要求真实网络令牌。
 
-- [ ] **Step 5: 更新使用说明及 changeset**
+- [x] **Step 5: 更新使用说明及 changeset**
 
 README 增加设置说明：默认开启保留原色，关闭后全部白色，适用于完整/精简版。Changeset front matter 为 `"@rexnow/danmu-universal": minor`，正文说明新增默认开启的保留颜色开关，关闭统一白色。
 
-- [ ] **Step 6: 校验格式和构建**
+- [x] **Step 6: 校验格式和构建**
 
 Run: `pnpm exec biome check apps/danmu-universal/src/index.ts apps/danmu-universal/src/rex-widget-env.d.ts apps/danmu-universal/src/scrapers/config.ts apps/danmu-universal/src/scrapers/config.test.ts apps/danmu-universal/src/scrapers/index.ts apps/danmu-universal/src/scrapers/comment-color.test.ts`
 
@@ -172,10 +172,12 @@ Run: `pnpm exec turbo run build --filter=@rexnow/danmu-universal...`
 
 Expected: 依赖构建和完整/精简版构建全部成功。检查两个 `dist/danmu-universal*.js` 的 WidgetMetadata 都包含 Step 1 指定的开关、默认值和选项，不受精简版隐藏条件限制；检查生成的类型声明与配置名一致，不提交 `dist`。若构建更改声明，仅保留本功能所需差异。
 
-- [ ] **Step 7: 提交该任务**
+- [x] **Step 7: 提交该任务**
 
 只 stage 本任务文件及构建产生的必要声明差异，使用 `feat(danmu): support white-only comment output`，footer 为 `Co-authored-by: Codex <noreply@openai.com>`。
 
 ## 执行记录
 
 Task 1 已完成并通过独立任务审查，提交 `10d738a`。用户最新选择统一白色，Task 2 接入输出策略并同步最终文案；不再受缺省颜色协议调查结果阻塞。使用用户选择的 subagent-driven-development 持续执行，不重复请求批准。
+
+最终审查补充：严格限制新字段的输入为两个枚举字符串，其余回退开启；实现及边界测试提交 `103ef0d`，已完成相应 RED/GREEN 和应用重建。既有声明生成插件提示为独立后续事项，当前声明手动同步并验证；尚未做实际宿主像素渲染测试。
