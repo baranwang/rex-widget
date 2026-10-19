@@ -15,6 +15,7 @@ import {
   parseMappingAgentArgs,
   runMappingAgent,
   runMappingAgentCli,
+  toCanonicalMapping,
   writeMappingAgentSummary,
   writeMappingArtifacts,
 } from "./mapping-agent.ts";
@@ -146,6 +147,74 @@ describe("mapping agent CLI and provider config parsing", () => {
       providerID: "custom",
       modelID: "model-a",
     });
+  });
+});
+
+describe("toCanonicalMapping", () => {
+  test("stores a TV provider as its season collection", () => {
+    expect(
+      toCanonicalMapping({
+        type: "tv",
+        tmdbId: 229192,
+        title: "沧元图",
+        providers: [
+          {
+            season: 1,
+            provider: "youku",
+            idString: "showId=adaec02f09f9469ab8d8&vid=XNTk3MzA5NzgzMg%3D%3D",
+            epOffset: 0,
+          },
+          {
+            season: 3,
+            provider: "tencent",
+            idString: "cid=mzc00200z195unq&vid=i4101vrl7tu",
+            epOffset: 0,
+          },
+          {
+            season: 1,
+            provider: "iqiyi",
+            idString: "entityId=album&episodeId=episode",
+            epOffset: 0,
+          },
+          {
+            season: 1,
+            provider: "bilibili",
+            idString: "seasonId=45962&aid=1&cid=2",
+            epOffset: 0,
+          },
+          {
+            season: 1,
+            provider: "mgtv",
+            idString: "dramaId=860862&videoId=18368257",
+            epOffset: 0,
+          },
+          {
+            season: 1,
+            provider: "renren",
+            idString: "dramaId=42&episodeId=104",
+            epOffset: 0,
+          },
+        ],
+      }).providers.map((provider) => provider.idString),
+    ).toEqual([
+      "showId=adaec02f09f9469ab8d8",
+      "cid=mzc00200z195unq",
+      "entityId=album",
+      "seasonId=45962",
+      "dramaId=860862",
+      "dramaId=42",
+    ]);
+  });
+
+  test("keeps a movie provider episode coordinate", () => {
+    expect(
+      toCanonicalMapping({
+        type: "movie",
+        tmdbId: 129,
+        title: "Spirited Away",
+        providers: [{ provider: "youku", idString: "showId=movie-show&vid=movie-video" }],
+      }).providers,
+    ).toEqual([{ provider: "youku", idString: "showId=movie-show&vid=movie-video" }]);
   });
 });
 

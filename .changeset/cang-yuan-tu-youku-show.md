@@ -2,4 +2,4 @@
 "@rexnow/danmu-universal": patch
 ---
 
-Fix Cang Yuan Tu Youku matching so later episodes no longer reuse episode 1.
+Fix TV season matching so a stored episode id cannot pin every episode to one video.

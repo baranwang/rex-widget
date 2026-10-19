@@ -1,11 +1,16 @@
+import { collectionProviderIdString, type ProviderName } from "@rexnow/scraper-kit";
 import { LOCAL_TMDB_PLATFORM_MAP } from "@rexnow/tmdb-mapping-kit/local-map";
 import type { GetEpisodeParam } from "../scrapers";
 import type { LocalMapLookupParams, LocalMapLookupProvider, LocalMapLookupResult } from "../types/local-map";
 
+const collectionIdString = (provider: string, idString: string): string =>
+  collectionProviderIdString(provider as ProviderName, idString);
+
 const cloneProviders = (providers: LocalMapLookupProvider[]): GetEpisodeParam[] =>
   providers.map(({ provider, idString, episodeNumber }) => {
-    if (episodeNumber === undefined) return { provider, idString };
-    return { provider, idString, episodeNumber };
+    const collectionId = collectionIdString(provider, idString);
+    if (episodeNumber === undefined) return { provider, idString: collectionId };
+    return { provider, idString: collectionId, episodeNumber };
   });
 
 export const lookupLocalMap = ({ type, tmdbId, season, episode }: LocalMapLookupParams): LocalMapLookupResult => {
