@@ -18,8 +18,6 @@ import { buildMappingAgentSystemPrompt } from "./mapping-agent-prompt.ts";
 import { createMappingTools, mappingAgentToolNames } from "./mapping-agent-tools/index.ts";
 import type { SubmitMapping } from "./mapping-agent-tools/submit.ts";
 
-export const mappingAgentMaxTurns = 12;
-
 export type MappingWorkspaceSnapshot = { files: Record<string, string | null> };
 
 export type MappingSessionMessage = {
@@ -221,14 +219,6 @@ export async function runPiMappingSession(options: {
   const { session } = await createSession({ customTools });
   let messages: MappingSessionMessage[] = [];
   try {
-    let turnCount = 0;
-    session.subscribe((event) => {
-      if (event.type !== "turn_end") return;
-      turnCount += 1;
-      if (turnCount >= mappingAgentMaxTurns) {
-        void session.abort();
-      }
-    });
     await session.prompt(mappingUserPrompt(options.issueNumber, options.issueBody));
     messages = Array.isArray(session.messages) ? session.messages : [];
   } finally {
