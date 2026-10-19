@@ -1,5 +1,12 @@
 # @rexnow/danmu-universal
 
+## 0.17.1
+
+### Patch Changes
+
+- 0390a96: Fix TV season matching so a stored episode id cannot pin every episode to one video.
+- 74b3206: Add TMDB local mapping for 现在就出发.
+
 ## 0.17.0
 
 ### Minor Changes
