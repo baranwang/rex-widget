@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import { describe, expect, test } from "@rstest/core";
 import {
   createLocalMap,
@@ -158,5 +160,23 @@ describe("renderLocalMapRuntimeModule", () => {
     expect(moduleCode).toContain('"97199": [');
     expect(moduleCode).toContain('"epOffset": 0');
     expect(moduleCode).not.toContain('"6": [');
+  });
+});
+
+describe("committed Cang Yuan Tu mapping", () => {
+  test("keeps the Youku season mapping on the show id", () => {
+    const mapping = parseLocalMapSourceFile({
+      filePath: "/repo/packages/tmdb-mapping-kit/data/tv/229192.json",
+      content: fs.readFileSync(path.resolve(import.meta.dirname, "../data/tv/229192.json"), "utf8"),
+    });
+
+    expect(mapping.providers).toEqual([
+      {
+        season: 1,
+        provider: "youku",
+        idString: "showId=adaec02f09f9469ab8d8",
+        epOffset: 0,
+      },
+    ]);
   });
 });
