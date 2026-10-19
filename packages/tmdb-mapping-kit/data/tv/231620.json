@@ -1,0 +1,13 @@
+{
+  "type": "tv",
+  "tmdbId": 231620,
+  "title": "现在就出发",
+  "providers": [
+    {
+      "season": 4,
+      "provider": "tencent",
+      "idString": "cid=mzc002001bk7moh",
+      "epOffset": 0
+    }
+  ]
+}
