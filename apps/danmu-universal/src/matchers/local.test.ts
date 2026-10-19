@@ -136,6 +136,33 @@ describe("Local TMDB platform map", () => {
 
     expect(providers).toEqual([{ provider: "bilibili", idString: "seasonId=zero", episodeNumber: 0 }]);
   });
+
+  test("looks up a TV season by its collection id when the stored id names one episode", () => {
+    LOCAL_TMDB_PLATFORM_MAP.tv["229192"] = [
+      {
+        season: 1,
+        provider: "youku",
+        idString: "showId=adaec02f09f9469ab8d8&vid=XNTk3MzA5NzgzMg%3D%3D",
+        epOffset: 0,
+      },
+      { season: 3, provider: "tencent", idString: "cid=mzc00200z195unq&vid=i4101vrl7tu", epOffset: 0 },
+      { season: 1, provider: "iqiyi", idString: "entityId=album&episodeId=episode", epOffset: 0 },
+      { season: 1, provider: "bilibili", idString: "seasonId=45962&aid=1&cid=2", epOffset: 0 },
+      { season: 1, provider: "mgtv", idString: "dramaId=860862&videoId=18368257", epOffset: 0 },
+      { season: 1, provider: "renren", idString: "dramaId=42&episodeId=104", epOffset: 0 },
+    ];
+
+    expect(getLocalEpisodeParams({ type: "tv", tmdbId: 229192, season: 1, episode: 94 })).toEqual([
+      { provider: "youku", idString: "showId=adaec02f09f9469ab8d8", episodeNumber: 94 },
+      { provider: "iqiyi", idString: "entityId=album", episodeNumber: 94 },
+      { provider: "bilibili", idString: "seasonId=45962", episodeNumber: 94 },
+      { provider: "mgtv", idString: "dramaId=860862", episodeNumber: 94 },
+      { provider: "renren", idString: "dramaId=42", episodeNumber: 94 },
+    ]);
+    expect(getLocalEpisodeParams({ type: "tv", tmdbId: 229192, season: 3, episode: 2 })).toEqual([
+      { provider: "tencent", idString: "cid=mzc00200z195unq", episodeNumber: 2 },
+    ]);
+  });
 });
 
 describe("searchDanmu local map episode filtering", () => {

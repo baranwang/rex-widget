@@ -57,3 +57,20 @@ export function generateProviderIdString<P extends ProviderName>(
       );
   }
 }
+
+export function collectionProviderIdString(provider: ProviderName, idString: string): string {
+  switch (provider) {
+    case "tencent":
+      return generateProviderIdString("tencent", { cid: parseProviderIdString("tencent", idString).cid });
+    case "youku":
+      return generateProviderIdString("youku", { showId: parseProviderIdString("youku", idString).showId });
+    case "iqiyi":
+      return generateProviderIdString("iqiyi", { entityId: parseProviderIdString("iqiyi", idString).entityId });
+    case "bilibili":
+      return generateProviderIdString("bilibili", { seasonId: parseProviderIdString("bilibili", idString).seasonId });
+    case "mgtv":
+      return generateProviderIdString("mgtv", { dramaId: parseProviderIdString("mgtv", idString).dramaId });
+    case "renren":
+      return generateProviderIdString("renren", { dramaId: parseProviderIdString("renren", idString).dramaId });
+  }
+}

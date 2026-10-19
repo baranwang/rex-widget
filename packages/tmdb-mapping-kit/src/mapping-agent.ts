@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { collectionProviderIdString } from "@rexnow/scraper-kit";
 import { type HttpAdapterRequestOptions, initializeFetchAdapter } from "@rexnow/scraper-kit/runtime";
 import {
   applyAuthoritativeTmdbTitle,
@@ -198,7 +199,7 @@ export function toCanonicalMapping(candidate: MappingCandidate): CanonicalMappin
     providers: candidate.providers.map(({ season, provider, idString, epRange, epOffset }) => ({
       season,
       provider,
-      idString,
+      idString: collectionProviderIdString(provider, idString),
       ...(epRange === undefined ? {} : { epRange }),
       epOffset,
     })),

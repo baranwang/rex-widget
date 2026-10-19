@@ -8,6 +8,7 @@ export type {
   YoukuId,
 } from "./provider-id";
 export {
+  collectionProviderIdString,
   generateProviderIdString,
   parseProviderIdString,
 } from "./provider-id";

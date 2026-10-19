@@ -1,5 +1,5 @@
 import { describe, expect, test } from "@rstest/core";
-import { generateProviderIdString, isProviderName, parseProviderIdString, providerNames } from "./index";
+import { collectionProviderIdString, generateProviderIdString, isProviderName, parseProviderIdString, providerNames } from "./index";
 
 describe("provider-id contracts", () => {
   test("providerNames contains exactly all supported providers", () => {
@@ -51,6 +51,16 @@ describe("provider-id contracts", () => {
       dramaId: 123,
       episodeId: 456,
     });
+  });
+
+  test("collectionProviderIdString drops the episode coordinate from a season id", () => {
+    expect(collectionProviderIdString("youku", "showId=s1&vid=v1")).toBe("showId=s1");
+    expect(collectionProviderIdString("tencent", "cid=c1&vid=v1")).toBe("cid=c1");
+    expect(collectionProviderIdString("iqiyi", "entityId=e1&episodeId=e2")).toBe("entityId=e1");
+    expect(collectionProviderIdString("bilibili", "seasonId=45962&aid=1&cid=2")).toBe("seasonId=45962");
+    expect(collectionProviderIdString("mgtv", "dramaId=860862&videoId=123")).toBe("dramaId=860862");
+    expect(collectionProviderIdString("renren", "dramaId=123&episodeId=456")).toBe("dramaId=123");
+    expect(collectionProviderIdString("bilibili", "seasonId=45962")).toBe("seasonId=45962");
   });
 
   test("generateProviderIdString throws provider-specific error for missing required field", () => {
