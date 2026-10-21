@@ -1,5 +1,11 @@
 # @rexnow/danmu-universal
 
+## 0.17.2
+
+### Patch Changes
+
+- 10aef3c: Add TMDB local mapping for 嫁金钗.
+
 ## 0.17.1
 
 ### Patch Changes
