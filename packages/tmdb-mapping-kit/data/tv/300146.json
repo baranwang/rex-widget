@@ -1,0 +1,13 @@
+{
+  "type": "tv",
+  "tmdbId": 300146,
+  "title": "嫁金钗",
+  "providers": [
+    {
+      "season": 1,
+      "provider": "youku",
+      "idString": "showId=736526",
+      "epOffset": 0
+    }
+  ]
+}
