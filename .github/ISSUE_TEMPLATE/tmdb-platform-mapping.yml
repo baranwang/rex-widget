@@ -1,5 +1,5 @@
 name: TMDB 平台映射
-description: 提交 TMDB 条目与视频平台链接映射请求（由维护者审核后进入处理流程）
+description: 提交一部电影或剧集，由映射 agent 搜索 TMDB 与视频平台并生成映射
 title: "[TMDB Mapping] "
 labels:
   - tmdb-mapping
@@ -9,33 +9,32 @@ body:
   - type: markdown
     attributes:
       value: |
-        请提交 TMDB 页面 URL 与一个或多个平台 URL（每行一个）。
-        季号为选填；若不填写，系统会按 series 级别映射处理，适合明显不会拆分多季的剧集。
-        提交后将由维护者审核并按仓库流程处理，请耐心等待。
+        只填标题即可。映射 agent 会自行搜索 TMDB 条目、季号和视频平台链接。
+        已经知道的链接或季号可以选填，用来缩小范围；留空不会挡住处理。
 
   - type: input
     id: media_title
     attributes:
-      label: 媒体标题（可选）
-      description: 请填写电影或剧集标题，自动化会从 TMDB 获取准确标题。
-      placeholder: 例如：哪吒之魔童闹海
+      label: 媒体标题
+      description: 电影或剧集标题。自动化会据此搜索 TMDB 和平台。
+      placeholder: 例如：嫁金钗
     validations:
-      required: false
+      required: true
 
   - type: input
     id: tmdb_url
     attributes:
-      label: TMDB 链接
-      description: 请提供完整 TMDB 页面链接。
+      label: TMDB 链接（可选）
+      description: 已知时填写。留空则由 agent 搜索。
       placeholder: https://www.themoviedb.org/movie/980477 或 https://www.themoviedb.org/tv/30983
     validations:
-      required: true
+      required: false
 
   - type: input
     id: season
     attributes:
       label: 季号（可选）
-      description: 若需要按季映射，请填写季号（如 1、2）；留空时按 series 级别映射处理。
+      description: 多季剧需要指定某一季时填写。留空则由 agent 判断，单季剧通常按 series 处理。
       placeholder: 例如：1
     validations:
       required: false
@@ -43,19 +42,19 @@ body:
   - type: textarea
     id: platform_urls
     attributes:
-      label: 视频平台链接
-      description: 请填写一个或多个平台链接，每行一个 URL。
+      label: 视频平台链接（可选）
+      description: 已知时每行一个 URL。留空则由 agent 搜索。
       placeholder: |
         https://v.qq.com/x/cover/mzc00200a1b2c3d.html
         https://www.iqiyi.com/v_19rr8p9q4k.html
     validations:
-      required: true
+      required: false
 
   - type: textarea
     id: notes
     attributes:
       label: 备注（可选）
-      description: 可补充版本信息、地区差异、映射说明等。
-      placeholder: 例如：该条目为 series 级别映射。
+      description: 版本、地区或其它需要缩小范围的说明。
+      placeholder: 例如：只要优酷正片。
     validations:
       required: false

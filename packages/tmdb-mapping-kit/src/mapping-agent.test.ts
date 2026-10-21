@@ -226,7 +226,9 @@ describe("issue template has no id: media_type", () => {
     );
     expect(template).not.toContain("id: media_type");
     expect(template).toContain("id: media_title");
-    expect(template).toMatch(/id: media_title[\s\S]*?required: false/);
+    expect(template).toMatch(/id: media_title[\s\S]*?required: true/);
+    expect(template).toMatch(/id: tmdb_url[\s\S]*?required: false/);
+    expect(template).toMatch(/id: platform_urls[\s\S]*?required: false/);
   });
 });
 
@@ -581,7 +583,7 @@ https://example.com/watch/unknown-provider
         env: sessionEnv,
         createSession: createFakeSession((customTools) =>
           executeLoggedSubmit(customTools, mapping, async (tools) => {
-            await requireTool(tools, "search").execute("search", { query: "Mismatched Candidate" });
+            await requireTool(tools, "search_catalog").execute("search", { query: "Mismatched Candidate" });
           }),
         ),
       }),
