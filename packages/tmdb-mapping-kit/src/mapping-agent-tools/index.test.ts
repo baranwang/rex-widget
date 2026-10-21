@@ -15,7 +15,9 @@ describe("mappingAgentToolNames", () => {
       "grep",
       "find",
       "ls",
-      "search",
+      "search_catalog",
+      "web_search",
+      "web_fetch",
       "get_tmdb",
       "parse_provider_url",
       "parse_id_string",
@@ -44,7 +46,9 @@ describe("createMappingTools", () => {
       expect(typeof tool.execute).toBe("function");
     }
     expect(tools.map((tool) => tool.name)).toEqual([
-      "search",
+      "search_catalog",
+      "web_search",
+      "web_fetch",
       "get_tmdb",
       "parse_provider_url",
       "parse_id_string",

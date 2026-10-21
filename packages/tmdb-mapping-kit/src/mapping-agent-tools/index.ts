@@ -14,6 +14,7 @@ import {
 import { searchCatalog } from "./search/index.ts";
 import { parseSubmitMapping, type SubmitMapping } from "./submit.ts";
 import { getTmdb } from "./tmdb.ts";
+import { webFetch, webSearch } from "./web-search.ts";
 
 export const mappingAgentToolNames = [
   "bash",
@@ -21,7 +22,9 @@ export const mappingAgentToolNames = [
   "grep",
   "find",
   "ls",
-  "search",
+  "search_catalog",
+  "web_search",
+  "web_fetch",
   "get_tmdb",
   "parse_provider_url",
   "parse_id_string",
@@ -52,10 +55,10 @@ export function createMappingTools(options: {
 }) {
   const { env, repoRoot, onTool, onSubmit } = options;
 
-  const search = defineTool({
-    name: "search",
-    label: "Search",
-    description: "Search TMDB and supported platform catalogs",
+  const searchCatalogTool = defineTool({
+    name: "search_catalog",
+    label: "Search Catalog",
+    description: "Search TMDB and platform catalogs (360kan, mgtv, renren). Not the open web.",
     parameters: Type.Object({
       query: Type.String({ description: "Search query" }),
       scope: Type.Optional(
@@ -70,9 +73,37 @@ export function createMappingTools(options: {
       limit: Type.Optional(Type.Number()),
     }),
     async execute(_toolCallId, params) {
-      onTool("search");
+      onTool("search_catalog");
       const result = await searchCatalog(params, env);
       return toolResult(result);
+    },
+  });
+
+  const webSearchTool = defineTool({
+    name: "web_search",
+    label: "Web Search",
+    description: "Search the public web for pages about a title or platform URL",
+    parameters: Type.Object({
+      query: Type.String({ description: "Search query" }),
+    }),
+    async execute(_toolCallId, params) {
+      onTool("web_search");
+      const results = await webSearch(params.query);
+      return toolResult({ results });
+    },
+  });
+
+  const webFetchTool = defineTool({
+    name: "web_fetch",
+    label: "Web Fetch",
+    description: "Fetch page text for up to 3 URLs from web_search",
+    parameters: Type.Object({
+      urls: Type.Array(Type.String(), { description: "Page URLs, at most 3 are fetched" }),
+    }),
+    async execute(_toolCallId, params) {
+      onTool("web_fetch");
+      const results = await webFetch(params.urls);
+      return toolResult({ results });
     },
   });
 
@@ -259,7 +290,9 @@ export function createMappingTools(options: {
   });
 
   return [
-    search,
+    searchCatalogTool,
+    webSearchTool,
+    webFetchTool,
     getTmdbTool,
     parseProviderUrl,
     parseIdString,
