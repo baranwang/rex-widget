@@ -1,5 +1,11 @@
 # @rexnow/danmu-universal
 
+## 0.17.5
+
+### Patch Changes
+
+- 4ec41a6: Keep numbered Tencent episodes whose titles contain 特别加长版.
+
 ## 0.17.4
 
 ### Patch Changes
