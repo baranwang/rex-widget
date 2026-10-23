@@ -2,7 +2,7 @@ import { describe, expect, test } from "@rstest/core";
 import { initializeFetchAdapter } from "./runtime";
 import { TencentScraper } from "./scrapers/tencent";
 
-const tencentResponse = (items: Array<{ vid: string; title: string }>) => ({
+const tencentResponse = (items: Array<{ vid: string; title: string; union_title?: string }>) => ({
   data: {
     module_list_datas: [
       {
@@ -12,7 +12,7 @@ const tencentResponse = (items: Array<{ vid: string; title: string }>) => ({
               item_datas: items.map((item) => ({
                 item_params: {
                   ...item,
-                  union_title: item.title,
+                  union_title: item.union_title ?? item.title,
                   is_trailer: "0",
                 },
               })),
@@ -112,6 +112,35 @@ describe("Tencent variety routing", () => {
         }),
       }),
     );
+  });
+
+  test("keeps a numbered episode whose subtitle contains 特别加长版", async () => {
+    initializeFetchAdapter({
+      async get<_T>() {
+        throw new Error("Unexpected GET request");
+      },
+      async post<T>() {
+        return {
+          data: tencentResponse([
+            { vid: "ep1", title: "第01话 塞外镖客 特别加长版", union_title: "塞外镖客 特别加长版_01" },
+            { vid: "ep3", title: "第03话 风起云涌", union_title: "风起云涌_03" },
+          ]) as T,
+          statusCode: 200,
+          headers: {},
+        };
+      },
+    });
+
+    const episodes = await new TencentScraper().getEpisodes("cid=mzc00200ab0trmk", 1);
+
+    expect(episodes).toEqual([
+      expect.objectContaining({
+        episodeId: "cid=mzc00200ab0trmk&vid=ep1",
+        episodeTitle: "塞外镖客 特别加长版_01",
+        episodeNumber: 1,
+        episodeEdition: "main",
+      }),
+    ]);
   });
 
   test("keeps a proven exact vid without requiring it to appear in Tencent's incomplete lists", async () => {
