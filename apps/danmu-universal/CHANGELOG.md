@@ -1,5 +1,11 @@
 # @rexnow/danmu-universal
 
+## 0.17.4
+
+### Patch Changes
+
+- 9cd4553: Add TMDB local mapping for 镖人.
+
 ## 0.17.3
 
 ### Patch Changes
