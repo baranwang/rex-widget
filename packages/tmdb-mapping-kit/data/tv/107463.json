@@ -1,0 +1,13 @@
+{
+  "type": "tv",
+  "tmdbId": 107463,
+  "title": "镖人",
+  "providers": [
+    {
+      "season": 1,
+      "provider": "tencent",
+      "idString": "cid=mzc00200ab0trmk",
+      "epOffset": 0
+    }
+  ]
+}
