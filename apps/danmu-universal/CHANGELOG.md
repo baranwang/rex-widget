@@ -1,5 +1,11 @@
 # @rexnow/danmu-universal
 
+## 0.17.3
+
+### Patch Changes
+
+- 63f76c0: Add TMDB local mapping for 一人之下.
+
 ## 0.17.2
 
 ### Patch Changes
