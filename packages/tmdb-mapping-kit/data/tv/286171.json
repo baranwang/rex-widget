@@ -1,0 +1,13 @@
+{
+  "type": "tv",
+  "tmdbId": 286171,
+  "title": "尚公主",
+  "providers": [
+    {
+      "season": 1,
+      "provider": "tencent",
+      "idString": "cid=mzc002001w361jz",
+      "epOffset": 0
+    }
+  ]
+}
