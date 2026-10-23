@@ -218,6 +218,13 @@ export class TencentScraper extends BaseScraper<typeof tencentIdSchema> {
     return comments;
   }
 
+  private isExcludedEpisode(item: { title: string; union_title?: string }) {
+    const titles = [item.title, item.union_title].filter((title): title is string => Boolean(title));
+    // 第N话/集 can contain 特别加长版 and still be the real episode.
+    if (titles.some((title) => /第\s*[0-9]+\s*(?:集|话|話|回)/.test(title))) return false;
+    return titles.some((title) => this.episodeBlacklistPattern.test(title));
+  }
+
   private async requestEpisodes(
     cid: string,
     pageParams: Record<string, unknown>,
@@ -258,20 +265,10 @@ export class TencentScraper extends BaseScraper<typeof tencentIdSchema> {
       return [];
     }
     const titles = response.data
-      .filter(
-        (item) =>
-          !this.episodeBlacklistPattern.test(item.title) &&
-          (!item.union_title || !this.episodeBlacklistPattern.test(item.union_title)),
-      )
+      .filter((item) => !this.isExcludedEpisode(item))
       .map((item) => (item.union_title && item.union_title !== item.title ? item.union_title : item.title));
     const isVariety = forceVariety || isVarietyEpisodeList(titles, context);
-    const sourceItems = isVariety
-      ? response.data
-      : response.data.filter(
-          (item) =>
-            !this.episodeBlacklistPattern.test(item.title) &&
-            (!item.union_title || !this.episodeBlacklistPattern.test(item.union_title)),
-        );
+    const sourceItems = isVariety ? response.data : response.data.filter((item) => !this.isExcludedEpisode(item));
     return sourceItems.map((item: { vid: string; title: string; union_title?: string }) => {
       const title = item.union_title && item.union_title !== item.title ? item.union_title : item.title;
       const identity = isVariety
