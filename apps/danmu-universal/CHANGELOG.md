@@ -1,5 +1,11 @@
 # @rexnow/danmu-universal
 
+## 0.17.6
+
+### Patch Changes
+
+- 8d50eca: Add TMDB local mapping for 尚公主.
+
 ## 0.17.5
 
 ### Patch Changes
