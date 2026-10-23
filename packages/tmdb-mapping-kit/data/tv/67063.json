@@ -1,0 +1,13 @@
+{
+  "type": "tv",
+  "tmdbId": 67063,
+  "title": "一人之下",
+  "providers": [
+    {
+      "season": 6,
+      "provider": "tencent",
+      "idString": "cid=mzc00200fobieel",
+      "epOffset": 0
+    }
+  ]
+}
