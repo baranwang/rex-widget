@@ -1,0 +1,19 @@
+{
+  "type": "tv",
+  "tmdbId": 330609,
+  "title": "财神窦占龙",
+  "providers": [
+    {
+      "season": 1,
+      "provider": "bilibili",
+      "idString": "seasonId=264970",
+      "epOffset": 0
+    },
+    {
+      "season": 1,
+      "provider": "iqiyi",
+      "idString": "entityId=1854306631307300",
+      "epOffset": 0
+    }
+  ]
+}
