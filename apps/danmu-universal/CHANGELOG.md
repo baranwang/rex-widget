@@ -1,5 +1,11 @@
 # @rexnow/danmu-universal
 
+## 0.17.7
+
+### Patch Changes
+
+- 94655c4: Add TMDB local mapping for 财神窦占龙.
+
 ## 0.17.6
 
 ### Patch Changes
