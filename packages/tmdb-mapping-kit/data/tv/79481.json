@@ -1,0 +1,13 @@
+{
+  "type": "tv",
+  "tmdbId": 79481,
+  "title": "斗破苍穹",
+  "providers": [
+    {
+      "season": 5,
+      "provider": "tencent",
+      "idString": "cid=mzc0020027yzd9e",
+      "epOffset": 0
+    }
+  ]
+}
