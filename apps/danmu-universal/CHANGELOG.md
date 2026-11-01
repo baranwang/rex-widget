@@ -1,5 +1,11 @@
 # @rexnow/danmu-universal
 
+## 0.17.8
+
+### Patch Changes
+
+- 65ea8a2: Add TMDB local mapping for 斗破苍穹.
+
 ## 0.17.7
 
 ### Patch Changes
