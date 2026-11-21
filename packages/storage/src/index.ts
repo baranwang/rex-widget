@@ -25,15 +25,21 @@ class Storage {
   private readonly defaultTTL = TTL_5_MINUTES;
 
   async get(key: string) {
-    const value = await Widget.storage.get(key);
+    const value = await Widget.storage.get<string | z.infer<typeof StorageValue>>(key);
     if (!value) return null;
-    const result = safeJsonParseWithZod(value, StorageValue);
+    const result =
+      typeof value === "string"
+        ? safeJsonParseWithZod(value, StorageValue)
+        : (() => {
+            const parsed = StorageValue.safeParse(value);
+            return parsed.success ? parsed.data : null;
+          })();
     if (!result) {
       console.warn(`Failed to parse storage value for key: ${key}`);
       this.remove(key);
       return null;
     }
-    if (result?.expiresAt < Date.now()) {
+    if (result.expiresAt < Date.now()) {
       console.warn(`Storage value for key: ${key} has expired`);
       this.remove(key);
       return null;

@@ -258,7 +258,7 @@ WidgetMetadata = {
 };
 
 const checkShowEmptyAnimeTitle = (params: SearchDanmuParams) => {
-  if (import.meta.rstest) {
+  if (import.meta.rstest || process.env.RSTEST) {
     return false;
   }
   if (process.env.NODE_ENV === "development") {
@@ -328,15 +328,17 @@ searchDanmu = async (params) => {
   });
 
   const tmdbId = params.tmdbId ? Number(params.tmdbId) : NaN;
+  const isMovieOrTv = mediaType === "tv" || mediaType === "movie";
   const season = mediaType === "tv" && params.season !== undefined ? Number(params.season) : null;
-  const localEpisodeParams = Number.isInteger(tmdbId)
-    ? getLocalEpisodeParams({
-        type: mediaType,
-        tmdbId,
-        season,
-        episode: episode === undefined ? undefined : Number(episode),
-      })
-    : [];
+  const localEpisodeParams =
+    isMovieOrTv && Number.isInteger(tmdbId)
+      ? getLocalEpisodeParams({
+          type: mediaType,
+          tmdbId,
+          season,
+          episode: episode === undefined ? undefined : Number(episode),
+        })
+      : [];
   if (localEpisodeParams.length) {
     console.log("Found local episode params", localEpisodeParams);
     const localEpisodes = await getMatchedEpisodes(localEpisodeParams, false);
@@ -351,6 +353,7 @@ searchDanmu = async (params) => {
 
   try {
     if (
+      isMovieOrTv &&
       globalParams?.global.experimental.doubanHistory.enabled &&
       globalParams?.global.experimental.doubanHistory.dbcl2
     ) {
@@ -392,7 +395,7 @@ getDetail = async (params) => {
 
   const { animeId, type: mediaType, episode, episodeName, airDate } = params;
   if (!animeId || animeId === EMPTY_ANIME_CONFIG.ID) {
-    return null;
+    return [];
   }
 
   return scraper.getDetailWithAnimeId(animeId.toString(), mediaType as MediaType, episode, {
@@ -404,10 +407,15 @@ getDetail = async (params) => {
 getComments = async (params) => {
   scraper.setGlobalParams(params);
 
-  const { animeId, commentId, segmentTime } = params;
-  const videoId = commentId ?? animeId;
-  if (videoId === EMPTY_ANIME_CONFIG.ID) {
-    return null;
+  const animeId = "animeId" in params ? params.animeId : undefined;
+  const segmentTime =
+    "segmentTime" in params && params.segmentTime !== undefined ? Number(params.segmentTime) : undefined;
+  const videoId = params.commentId ?? animeId;
+  if (!videoId || videoId === EMPTY_ANIME_CONFIG.ID) {
+    return {
+      comments: [],
+      count: 0,
+    };
   }
   const comments = await scraper.getDanmuWithSegmentTimeByVideoId(videoId.toString(), segmentTime);
   return {

@@ -313,10 +313,10 @@ describe("360 variety playlinks", () => {
         new QihooMatcher().getEpisodeParams({
           seriesName: "地球超新鲜",
           type: "tv",
-          season: 2,
-          episode: 8,
+          season: "2",
+          episode: "8",
           episodeName: "第四期下",
-        }),
+        } as SearchDanmuParams),
       ).resolves.toEqual([]);
     } finally {
       Widget.storage.clear();
@@ -378,10 +378,10 @@ describe("360 variety playlinks", () => {
         new QihooMatcher().getEpisodeParams({
           seriesName: "半熟恋人5",
           type: "tv",
-          season: 1,
-          episode: 8,
+          season: "1",
+          episode: "8",
           episodeName: "第8期下",
-        }),
+        } as SearchDanmuParams),
       ).resolves.toEqual([
         {
           provider: "tencent",
@@ -484,11 +484,11 @@ describe("360 variety playlinks", () => {
         new QihooMatcher().getEpisodeParams({
           seriesName: "中国新说唱",
           type: "tv",
-          season: 9,
-          episode: 11,
+          season: "9",
+          episode: "11",
           episodeName: "第4期中 Rapeter替爷爷写下跨时空情书",
           airDate: "2026-07-18",
-        }),
+        } as SearchDanmuParams),
       ).resolves.toEqual([
         {
           provider: "iqiyi",
@@ -579,10 +579,10 @@ describe("360 variety playlinks", () => {
         new QihooMatcher().getEpisodeParams({
           seriesName: "分页综艺",
           type: "tv",
-          season: 1,
-          episode: 8,
+          season: "1",
+          episode: "8",
           episodeName: "第4期下",
-        }),
+        } as SearchDanmuParams),
       ).resolves.toEqual([
         {
           provider: "tencent",

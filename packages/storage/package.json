@@ -18,12 +18,12 @@
   },
   "dependencies": {
     "@rexnow/libs-utils": "workspace:^",
-    "zod": "4.0.17"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
-    "@rexnow/libs": "3.0.0",
-    "@rslib/core": "^0.18.2",
-    "@types/node": "^24.10.1",
-    "typescript": "^5.9.3"
+    "@rexnow/libs": "^3.2.0",
+    "@rslib/core": "^1.0.7",
+    "@types/node": "^26.6.6",
+    "typescript": "^7.0.2"
   }
 }
