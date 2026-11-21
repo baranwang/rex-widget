@@ -148,6 +148,7 @@ describe("Rex YouTube Music widget", () => {
     expect(WidgetMetadata.contentType).toBe("music");
     expect(WidgetMetadata.requiredVersion).toBe("0.0.7");
     expect(WidgetMetadata.continuousPlay).toBe(true);
+    expect(WidgetMetadata.iconurl).toBe("https://music.youtube.com/img/favicon_144.png");
     expect(WidgetMetadata.modules.map((m) => m.id)).toEqual([
       "home",
       "charts",
