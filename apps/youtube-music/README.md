@@ -16,6 +16,12 @@
 
 ## 安装使用
 
+### 一键安装
+
+[![Rex Widget](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Funpkg.com%2F%40rexnow%2Fyoutube-music%2Fpackage.json&query=%24.version&prefix=YouTube%20Music%20v&style=flat-square&label=Rex%20Widget&labelColor=black)](https://rexnow.tv/widget/?url=https://unpkg.com/@rexnow/youtube-music)
+
+安装链接：<https://rexnow.tv/widget/?url=https://unpkg.com/@rexnow/youtube-music>
+
 ### 手动安装
 
 在 Rex `0.0.7+` 的模块管理中导入以下 URL：
