@@ -4,8 +4,8 @@ export const WIDGET_I18N: NonNullable<WidgetMetadata["i18n"]> = {
       "YouTube Music plugin supporting Home, Charts, New Releases, Genres, Radio, Artists, Search, Albums, Playlists, and direct audio playback",
     语言: "Language",
     "YouTube Music Cookie（可选）": "YouTube Music Cookie (Optional)",
-    "可选。填入 music.youtube.com 的 Cookie（含 SAPISID / __Secure-3PAPISID）可解锁个人首页、喜欢的音乐、个人歌单和收听历史；不填可直接使用公开曲库。":
-      "Optional. Paste music.youtube.com Cookie (with SAPISID / __Secure-3PAPISID) for personalized Home, Liked Songs, Playlists, and History; leave empty for public browsing and playback.",
+    "可选。粘贴 music.youtube.com 请求的完整 Cookie 头（或直接粘贴 Network 面板中 browse 请求的 Copy as cURL），不要只填单个 SAPISID 值；不填可直接使用公开曲库。":
+      "Optional. Paste the full Cookie request header from music.youtube.com (or paste Copy as cURL from a browse request in DevTools Network), not a single SAPISID value; leave empty for public browsing.",
     音频格式偏好: "Audio Format",
     "AAC (M4A) 兼容系统播放器与软解；Opus (WebM) 码率更高，默认通过软件解码播放":
       "AAC (M4A) works with both system and app players; Opus (WebM) offers higher bitrate via app decoder.",
@@ -67,6 +67,8 @@ export const WIDGET_I18N: NonNullable<WidgetMetadata["i18n"]> = {
     根据你最近听过的音乐持续推荐相似曲目: "Songs like what you played recently",
     "请在模块设置中填写 YouTube Music Cookie 后查看个人音乐库":
       "Please set your YouTube Music Cookie in module settings to access My Library",
+    "Cookie 格式不完整：请粘贴完整的 Cookie 请求头（含 SID 与 SAPISID），或直接粘贴 Network 面板中 browse 请求的 Copy as cURL，不能只填单个 SAPISID 值":
+      "Incomplete Cookie: paste the full Cookie request header (including SID and SAPISID) or Copy as cURL from a browse request in DevTools Network, not a single SAPISID value",
     "YouTube Music 登录状态已失效，请更新 Cookie": "Your YouTube Music session has expired; please update your Cookie",
     无法识别的详情链接: "Unrecognized detail link",
     "YouTube 未返回有效的访问标识 (visitorData)": "YouTube returned no visitorData ID",
@@ -77,8 +79,8 @@ export const WIDGET_I18N: NonNullable<WidgetMetadata["i18n"]> = {
       "YouTube Music 音樂插件，支援首頁推薦、排行榜、新發行、流派、電台、歌手、搜尋、專輯、歌單與直接音訊播放",
     语言: "語言",
     "YouTube Music Cookie（可选）": "YouTube Music Cookie（選填）",
-    "可选。填入 music.youtube.com 的 Cookie（含 SAPISID / __Secure-3PAPISID）可解锁个人首页、喜欢的音乐、个人歌单和收听历史；不填可直接使用公开曲库。":
-      "選填。填入 music.youtube.com 的 Cookie（含 SAPISID / __Secure-3PAPISID）可解鎖個人首頁、喜歡的音樂、個人歌單與收聽紀錄；不填可直接使用公開曲庫。",
+    "可选。粘贴 music.youtube.com 请求的完整 Cookie 头（或直接粘贴 Network 面板中 browse 请求的 Copy as cURL），不要只填单个 SAPISID 值；不填可直接使用公开曲库。":
+      "選填。貼上 music.youtube.com 請求的完整 Cookie 標頭（或直接貼上 Network 面板中 browse 請求的 Copy as cURL），不要只填單一 SAPISID 值；不填可直接使用公開曲庫。",
     音频格式偏好: "音訊格式偏好",
     "AAC (M4A) 兼容系统播放器与软解；Opus (WebM) 码率更高，默认通过软件解码播放":
       "AAC (M4A) 相容系統播放器與軟解；Opus (WebM) 碼率更高，預設透過軟體解碼播放",
@@ -140,6 +142,8 @@ export const WIDGET_I18N: NonNullable<WidgetMetadata["i18n"]> = {
     根据你最近听过的音乐持续推荐相似曲目: "根據你最近聽過的音樂持續推薦相似曲目",
     "请在模块设置中填写 YouTube Music Cookie 后查看个人音乐库":
       "請在模組設定中填寫 YouTube Music Cookie 後查看個人音樂庫",
+    "Cookie 格式不完整：请粘贴完整的 Cookie 请求头（含 SID 与 SAPISID），或直接粘贴 Network 面板中 browse 请求的 Copy as cURL，不能只填单个 SAPISID 值":
+      "Cookie 格式不完整：請貼上完整的 Cookie 請求標頭（含 SID 與 SAPISID），或直接貼上 Network 面板中 browse 請求的 Copy as cURL，不能只填單一 SAPISID 值",
     "YouTube Music 登录状态已失效，请更新 Cookie": "YouTube Music 登入狀態已失效，請更新 Cookie",
     无法识别的详情链接: "無法識別的詳情連結",
     "YouTube 未返回有效的访问标识 (visitorData)": "YouTube 未回傳有效的存取識別 (visitorData)",

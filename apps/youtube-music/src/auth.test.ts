@@ -5,6 +5,7 @@ import {
   extractCookieValue,
   getQueryParam,
   isYouTubeHostname,
+  parseCookieAuthInput,
   parseHttpsUrlParts,
   setQueryParams,
   sha1,
@@ -54,6 +55,68 @@ describe("sha1 and SAPISIDHASH auth", () => {
       .update("1700000001 fallback_sid https://s.youtube.com", "utf8")
       .digest("hex");
     expect(headers.authorization).toBe(`SAPISIDHASH 1700000001_${expectedHash}`);
+  });
+
+  test("parses Copy as cURL (bash & cmd), Request Headers, fetch, and multi-account headers", () => {
+    const bashCurl = [
+      "curl 'https://music.youtube.com/youtubei/v1/browse?prettyPrint=false' \\",
+      "  -H 'accept: */*' \\",
+      "  -b 'HSID=h1; SSID=s1; SAPISID=tok_bash/1; __Secure-3PAPISID=tok_bash/1' \\",
+      "  -H 'x-goog-authuser: 2' \\",
+      "  -H 'x-goog-pageid: 109876543210'",
+    ].join("\n");
+    const parsedBash = parseCookieAuthInput(bashCurl);
+    expect(parsedBash).toEqual({
+      cookie: "HSID=h1; SSID=s1; SAPISID=tok_bash/1; __Secure-3PAPISID=tok_bash/1",
+      authUser: "2",
+      pageId: "109876543210",
+      hasSapisid: true,
+    });
+    const bashHeaders = buildAuthHeaders(bashCurl, "https://music.youtube.com", 1700000002);
+    expect(bashHeaders["x-goog-authuser"]).toBe("2");
+    expect(bashHeaders["x-goog-pageid"]).toBe("109876543210");
+    expect(bashHeaders.authorization).toMatch(/^SAPISIDHASH 1700000002_[0-9a-f]{40}$/);
+
+    const safariCurl = `curl 'https://music.youtube.com/youtubei/v1/browse' -H 'Cookie: HSID=h2; SAPISID=tok_safari/2'`;
+    expect(parseCookieAuthInput(safariCurl)).toEqual({
+      cookie: "HSID=h2; SAPISID=tok_safari/2",
+      authUser: "0",
+      hasSapisid: true,
+    });
+
+    const cmdCurl = [
+      'curl ^"https://music.youtube.com/youtubei/v1/browse?prettyPrint=false^" ^',
+      '  -b ^"HSID=h3; __Secure-3PAPISID=tok_cmd/3^" ^',
+      '  -H ^"x-goog-authuser: 1^"',
+    ].join("\r\n");
+    expect(parseCookieAuthInput(cmdCurl)).toEqual({
+      cookie: "HSID=h3; __Secure-3PAPISID=tok_cmd/3",
+      authUser: "1",
+      hasSapisid: true,
+    });
+
+    const rawHeaders = ["Host: music.youtube.com", "Cookie: HSID=h4; SAPISID=tok_hdr/4", "X-Goog-AuthUser: 1"].join(
+      "\n",
+    );
+    expect(parseCookieAuthInput(rawHeaders)).toEqual({
+      cookie: "HSID=h4; SAPISID=tok_hdr/4",
+      authUser: "1",
+      hasSapisid: true,
+    });
+
+    const nodeFetch = `fetch("https://music.youtube.com/youtubei/v1/browse", { "headers": { "cookie": "HSID=h5; SAPISID=tok_fetch/5" } });`;
+    expect(parseCookieAuthInput(nodeFetch)).toEqual({
+      cookie: "HSID=h5; SAPISID=tok_fetch/5",
+      authUser: "0",
+      hasSapisid: true,
+    });
+
+    // A bare SAPISID token without key=value pairs must be flagged as incomplete
+    expect(parseCookieAuthInput("AbCdEf123456/XyZ789")).toEqual({
+      cookie: "AbCdEf123456/XyZ789",
+      authUser: "0",
+      hasSapisid: false,
+    });
   });
 });
 
