@@ -31,8 +31,8 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
-    "@rexnow/libs": "^3.2.0",
-    "@rexnow/rslib-plugin": "^3.2.0",
+    "@rexnow/libs": "^3.2.1",
+    "@rexnow/rslib-plugin": "^3.2.1",
     "@rexnow/tmdb-mapping-kit": "workspace:^",
     "@rsdoctor/rspack-plugin": "^1.6.5",
     "@rslib/core": "^1.0.7",

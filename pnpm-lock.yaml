@@ -240,11 +240,11 @@ importers:
         version: 4.6.7
     devDependencies:
       '@rexnow/libs':
-        specifier: ^3.2.0
-        version: 3.2.0
+        specifier: ^3.2.1
+        version: 3.2.1
       '@rexnow/rslib-plugin':
-        specifier: ^3.2.0
-        version: 3.2.0
+        specifier: ^3.2.1
+        version: 3.2.1
       '@rexnow/tmdb-mapping-kit':
         specifier: workspace:^
         version: link:../../packages/tmdb-mapping-kit
@@ -279,11 +279,11 @@ importers:
   apps/youtube-music:
     devDependencies:
       '@rexnow/libs':
-        specifier: ^3.2.0
-        version: 3.2.0
+        specifier: ^3.2.1
+        version: 3.2.1
       '@rexnow/rslib-plugin':
-        specifier: ^3.2.0
-        version: 3.2.0
+        specifier: ^3.2.1
+        version: 3.2.1
       '@rslib/core':
         specifier: ^1.0.7
         version: 1.0.7(core-js@3.47.0)(typescript@7.0.2)
@@ -310,8 +310,8 @@ importers:
         version: 4.6.7
     devDependencies:
       '@rexnow/libs':
-        specifier: ^3.2.0
-        version: 3.2.0
+        specifier: ^3.2.1
+        version: 3.2.1
       '@rslib/core':
         specifier: ^1.0.7
         version: 1.0.7(core-js@3.47.0)(typescript@7.0.2)
@@ -396,8 +396,8 @@ importers:
         version: 4.6.7
     devDependencies:
       '@rexnow/libs':
-        specifier: ^3.2.0
-        version: 3.2.0
+        specifier: ^3.2.1
+        version: 3.2.1
       '@rslib/core':
         specifier: ^1.0.7
         version: 1.0.7(core-js@3.47.0)(typescript@7.0.2)
@@ -1136,11 +1136,11 @@ packages:
   '@protobufjs/utf8@1.1.2':
     resolution: {integrity: sha512-b1UQwcEZ4yCnMCD8DAL1VlbvBJE9/IX4FTIp7BG1xYpf29SLazLSrqUkj4w7Y5y7cCVP6E5tcqqcI0xemPkHug==}
 
-  '@rexnow/libs@3.2.0':
-    resolution: {integrity: sha512-ngp4MYxn7NEWyZq7a6t65n//78LDYl/nYue+aqfd8e3bWNkeZJrokC+/j5YV+NkgZ5kgDgr/PQ7WigW8djBuLQ==}
+  '@rexnow/libs@3.2.1':
+    resolution: {integrity: sha512-wXbaM7VDAiBxtTs34awsY1IaB6lEM2S+BYZiXKgrveL3imNIsHrAGmR8+FYf2VFKfQIFzz1Uw/962V/ohGAV3A==}
 
-  '@rexnow/rslib-plugin@3.2.0':
-    resolution: {integrity: sha512-ElVzpN5f3JeI54EBDvTS2FHfvZs9YtV/av5Q8joCcQKuvKhiaVxnHlehhd2UrwcWchJe38qJF0Q/eKG2yjGI6w==}
+  '@rexnow/rslib-plugin@3.2.1':
+    resolution: {integrity: sha512-M9i3VGBZ5txgXFfeCrBTQexO7l9YSpxcZh/CDtfvCx/xPGHVDK79O2OlXQ4xiAG7bPcGL/JL4BmrnEUHvcXcVg==}
 
   '@rsbuild/core@2.3.3':
     resolution: {integrity: sha512-IdbBXZrIY16RxnQduXRrsRBQtJ/X7JkYESrk6D46WA918wrckYTBxE09vHvDxR+3JoCLE02vOm2NPBNxqaUw5A==}
@@ -3376,11 +3376,11 @@ snapshots:
 
   '@protobufjs/utf8@1.1.2': {}
 
-  '@rexnow/libs@3.2.0':
+  '@rexnow/libs@3.2.1':
     dependencies:
       cheerio: 1.2.0
 
-  '@rexnow/rslib-plugin@3.2.0':
+  '@rexnow/rslib-plugin@3.2.1':
     dependencies:
       '@hono/node-server': 2.1.1(hono@4.13.7)
       es-toolkit: 1.53.2

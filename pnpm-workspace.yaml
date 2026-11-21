@@ -2,8 +2,8 @@ packages:
   - "apps/*"
   - "packages/*"
 minimumReleaseAgeExclude:
-  - "@rexnow/libs@3.2.0"
-  - "@rexnow/rslib-plugin@3.2.0"
+  - "@rexnow/libs"
+  - "@rexnow/rslib-plugin"
 allowBuilds:
   "@google/genai": false
   core-js: false
