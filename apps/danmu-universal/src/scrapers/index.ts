@@ -152,7 +152,7 @@ export class Scraper {
     return comments;
   }
 
-  getDanmuWithSegmentTimeByVideoId(id: string, segmentTime: number) {
+  getDanmuWithSegmentTimeByVideoId(id: string, segmentTime?: number) {
     const items = id.split(",").map((item) => {
       const [provider, idString] = item.split(":");
       return {
@@ -215,7 +215,7 @@ export class Scraper {
     for (const scraper of this.scrapers) {
       if (scraper.search) {
         dramaTasks.push(
-          scraper.search(searchParams).catch((error) => {
+          scraper.search({ ...searchParams }).catch((error) => {
             console.error(error);
             return [];
           }),

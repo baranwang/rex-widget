@@ -23,26 +23,26 @@
     "@types/querystringify": "^2.0.2",
     "crypto-js": "^4.2.0",
     "date-fns": "^4.1.0",
-    "es-toolkit": "^1.39.9",
+    "es-toolkit": "^1.53.2",
     "fast-xml-parser": "^5.2.5",
     "opencc-js": "^1.0.5",
     "querystringify": "^2.2.0",
     "url-parse": "^1.5.10",
-    "zod": "4.0.17"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
-    "@rexnow/libs": "3.0.0",
-    "@rexnow/rslib-plugin": "3.0.0",
+    "@rexnow/libs": "^3.2.1",
+    "@rexnow/rslib-plugin": "^3.2.1",
     "@rexnow/tmdb-mapping-kit": "workspace:^",
-    "@rsdoctor/rspack-plugin": "^1.2.3",
-    "@rslib/core": "^0.18.2",
-    "@rstest/core": "^0.10.0",
+    "@rsdoctor/rspack-plugin": "^1.6.5",
+    "@rslib/core": "^1.0.7",
+    "@rstest/core": "^0.12.6",
     "@types/crypto-js": "^4.2.2",
-    "@types/node": "^22.16.0",
+    "@types/node": "^26.6.6",
     "@types/opencc-js": "^1.0.3",
     "@types/url-parse": "^1.4.11",
     "type-fest": "^4.41.0",
-    "typescript": "^5.9.3"
+    "typescript": "^7.0.2"
   },
   "repository": {
     "type": "git",

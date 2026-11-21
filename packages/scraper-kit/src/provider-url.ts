@@ -3,11 +3,13 @@ import { isProviderName, type ProviderName, providerNames } from "./provider-met
 import { createScraperRegistry } from "./scrapers";
 
 export type ParsedProviderUrl = {
-  provider: ProviderName;
-  id: ProviderId[ProviderName];
-  idString: string;
-  url: string;
-};
+  [P in ProviderName]: {
+    provider: P;
+    id: ProviderId[P];
+    idString: string;
+    url: string;
+  };
+}[ProviderName];
 
 type ParsedProviderUrlFor<P extends ProviderName> = {
   id: ProviderId[P];
@@ -46,7 +48,7 @@ export async function parseProviderUrl(url: string): Promise<ParsedProviderUrl |
       return {
         provider,
         ...parsed,
-      };
+      } as ParsedProviderUrl;
     }
   }
 

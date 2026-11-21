@@ -95,11 +95,11 @@ describe("danmu detail episode context", () => {
         manager.getEpisodeParams({
           seriesName: "地球超新鲜",
           type: "tv",
-          season: 2,
-          episode: 8,
+          season: "2",
+          episode: "8",
           episodeName: "第四期下",
           qihooSearch: "true",
-        }),
+        } as SearchDanmuParams),
       ).resolves.toContainEqual({
         provider: "tencent",
         idString: "cid=mzc002005etgzma&vid=n41020iq5oi",

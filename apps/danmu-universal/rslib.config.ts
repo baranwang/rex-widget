@@ -15,7 +15,6 @@ export default defineConfig({
       format: "esm",
       syntax: "es6",
       bundle: true,
-      autoExternal: false,
       source: {
         entry: {
           "danmu-universal": "./src/index.ts",
@@ -29,7 +28,6 @@ export default defineConfig({
       format: "esm",
       syntax: "es6",
       bundle: true,
-      autoExternal: false,
       source: {
         entry: {
           "danmu-universal.lite": "./src/index.ts",
@@ -42,6 +40,7 @@ export default defineConfig({
   ],
   output: {
     target: "web",
+    autoExternal: false,
     minify: {
       jsOptions: {
         minimizerOptions: {

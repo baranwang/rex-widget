@@ -1,5 +1,5 @@
 /// <reference types='@rexnow/libs/env' />
-namespace BaranwangDanmuUniversal {
+declare namespace BaranwangDanmuUniversal {
   interface GlobalParams {
     /**
      * 模糊匹配
@@ -12,7 +12,7 @@ namespace BaranwangDanmuUniversal {
      * @description 是否开启 360 影视搜索
      * @default 'false'
      */
-    qihooSearch: "false" | "true";
+    qihooSearch?: "false" | "true";
     /**
      * 未匹配到资源提示
      * @description 是否显示未匹配到资源提示
@@ -30,8 +30,6 @@ namespace BaranwangDanmuUniversal {
      * @default 'true'
      */
     "global.content.preserveDanmakuColor": "true" | "false";
-    /** 弹幕内容过滤 */
-    "global.content.blacklist": string;
     /**
      * 弹幕内容繁简转换
      * @default 'original'
@@ -49,19 +47,22 @@ namespace BaranwangDanmuUniversal {
      * @default 'false'
      */
     "global.experimental.doubanHistory.enabled": "false" | "true";
-    /** 豆瓣 Cookie 中的 dbcl2 值 */
-    "global.experimental.doubanHistory.dbcl2": string;
+    /**
+     * 豆瓣 Cookie 中的 dbcl2 值
+     * @default ''
+     */
+    "global.experimental.doubanHistory.dbcl2"?: string;
     /**
      * 豆瓣自定义评论
      * @default '自豪的使用 Rex*'
      */
-    "global.experimental.doubanHistory.customComment": string;
+    "global.experimental.doubanHistory.customComment"?: string;
   }
 }
 
 //#region searchDanmu
 /** Params of 搜索弹幕 */
-interface SearchDanmuParams extends BaranwangDanmuUniversal.GlobalParams, BaseDanmuParams {}
+interface SearchDanmuParams extends BaranwangDanmuUniversal.GlobalParams, BaseParams {}
 
 interface SearchDanmuReturnType {
   animes: Array<AnimeItem>;
@@ -71,14 +72,12 @@ interface SearchDanmuReturnType {
  * 搜索弹幕
  * @description 搜索弹幕
  */
-declare let searchDanmu: (
-  params: SearchDanmuParams,
-) => SearchDanmuReturnType | null | Promise<SearchDanmuReturnType | null>;
+declare let searchDanmu: (params: SearchDanmuParams) => SearchDanmuReturnType | Promise<SearchDanmuReturnType>;
 //#endregion searchDanmu
 
 //#region getDetail
 /** Params of 获取详情 */
-interface GetDetailParams extends BaranwangDanmuUniversal.GlobalParams, BaseDanmuParams, AnimeItem {}
+interface GetDetailParams extends BaranwangDanmuUniversal.GlobalParams, BaseParams, AnimeItem {}
 
 interface GetDetailReturnType extends Array<GetDetailResponseItem> {}
 
@@ -86,38 +85,30 @@ interface GetDetailReturnType extends Array<GetDetailResponseItem> {}
  * 获取详情
  * @description 获取详情
  */
-declare let getDetail: (params: GetDetailParams) => GetDetailReturnType | null | Promise<GetDetailReturnType | null>;
+declare let getDetail: (params: GetDetailParams) => GetDetailReturnType | Promise<GetDetailReturnType>;
 //#endregion getDetail
 
 //#region getComments
 /** Params of 获取弹幕 */
-interface GetCommentsParams extends BaranwangDanmuUniversal.GlobalParams, BaseDanmuParams, EpisodeItem {}
+interface GetCommentsGetCommentsParams extends BaranwangDanmuUniversal.GlobalParams, BaseParams, EpisodeItem {}
 
-interface GetCommentsReturnType extends GetCommentsResponse {}
+type GetCommentsGetCommentsReturnType = DanmuCommentsResult;
+//#endregion getComments
+
+//#region getDanmuWithSegmentTime
+/** Params of 获取弹幕切片 */
+interface GetDanmuWithSegmentTimeGetCommentsParams
+  extends BaranwangDanmuUniversal.GlobalParams,
+    BaseParams,
+    GetDanmuWithSegmentTimeParams {}
+
+type GetDanmuWithSegmentTimeGetCommentsReturnType = DanmuCommentsResult;
+//#endregion getDanmuWithSegmentTime
+type GetCommentsParams = GetCommentsGetCommentsParams | GetDanmuWithSegmentTimeGetCommentsParams;
+type GetCommentsReturnType = GetCommentsGetCommentsReturnType | GetDanmuWithSegmentTimeGetCommentsReturnType;
 
 /**
  * 获取弹幕
  * @description 获取弹幕
  */
-declare let getComments: (
-  params: GetCommentsParams,
-) => GetCommentsReturnType | null | Promise<GetCommentsReturnType | null>;
-//#endregion getComments
-
-//#region getDanmuWithSegmentTime
-/** Params of 获取弹幕切片 */
-interface GetCommentsParams
-  extends BaranwangDanmuUniversal.GlobalParams,
-    BaseDanmuParams,
-    GetDanmuWithSegmentTimeParams {}
-
-interface GetCommentsReturnType extends GetDanmuWithSegmentTimeResponse {}
-
-/**
- * 获取弹幕切片
- * @description 获取弹幕切片
- */
-declare let getComments: (
-  params: GetCommentsParams,
-) => GetCommentsReturnType | null | Promise<GetCommentsReturnType | null>;
-//#endregion getDanmuWithSegmentTime
+declare let getComments: (params: GetCommentsParams) => GetCommentsReturnType | Promise<GetCommentsReturnType>;
