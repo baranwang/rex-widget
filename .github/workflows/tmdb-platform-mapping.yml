@@ -21,11 +21,11 @@ jobs:
       issues: write
       id-token: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .node-version
           cache: pnpm
@@ -35,7 +35,7 @@ jobs:
 
       - name: Evaluate approval gates
         id: gates
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const approvalLabel = 'tmdb-mapping-approved';
@@ -67,7 +67,7 @@ jobs:
 
       - name: Remove approval trigger label
         if: ${{ steps.gates.outputs.trigger_label == 'true' }}
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             try {
@@ -86,7 +86,7 @@ jobs:
       - name: Idempotency pre-check
         id: idempotency
         if: ${{ steps.gates.outputs.can_proceed == 'true' }}
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const owner = context.repo.owner;
