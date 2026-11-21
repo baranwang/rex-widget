@@ -32,22 +32,16 @@ https://unpkg.com/@rexnow/youtube-music
 
 ### 可选：配置 Cookie
 
-> 为什么不能直接用 `console.log(document.cookie)`？  
-> Google 将核心登录态字段（`HSID`、`SSID`、`__Secure-1PSID`、`__Secure-3PSID` 等）设为了 `HttpOnly`，浏览器禁止页面 JS / Console 读取；只填单个 `SAPISID` 值也无法通过鉴权，必须从 **Network（网络）** 面板复制。
-
-只需 2 步（不用写任何代码）：
-
-1. 桌面浏览器登录 [https://music.youtube.com](https://music.youtube.com) → 打开开发者工具（`F12` / `Cmd+Option+I`）→ 切到 **Network（网络）** 面板 → 筛选 `browse`（若列表为空，刷新页面或点一下左侧「媒体库」）。
-2. 以下两种方式**任选其一**，直接粘贴到 Rex 模块设置的「YouTube Music Cookie（可选）」即可：
-   - **方式 A（推荐，最省事）**：右键任意一条 `browse?prettyPrint=false` 请求 → **Copy → Copy as cURL (bash)**（Safari 为「拷贝为 cURL」），把整段 cURL 直接粘贴进去，插件会自动提取完整 Cookie（含多账号 `x-goog-authuser` 与品牌账号 `x-goog-pageid`）。
-   - **方式 B（只复制纯净 Cookie）**：点开一条 `browse?prettyPrint=false` 请求 → 右侧 **Headers → Request Headers** → 右键 `cookie` 这一行 → **Copy value**，粘贴进去即可。内容应为多组 `key=value;` 键值对，例如：
+1. 在桌面浏览器登录 [https://music.youtube.com](https://music.youtube.com)，打开开发者工具（`F12` / `Cmd+Option+I`）并切换到 **Network（网络）** 面板，筛选 `browse`（若列表为空，刷新页面或点击左侧「媒体库」）。
+2. 以下两种方式任选其一，粘贴到 Rex 模块设置的「YouTube Music Cookie（可选）」中：
+   - **直接粘贴 cURL（推荐）**：右键任意一条 `browse?prettyPrint=false` 请求 → **Copy → Copy as cURL (bash)**（Safari 为「拷贝为 cURL」），整段粘贴即可，插件会自动提取 Cookie 及账号头信息。
+   - **复制 Cookie 值**：点开一条 `browse?prettyPrint=false` 请求 → **Headers → Request Headers** → 右键 `cookie` 这一行选择 **Copy value**，粘贴完整的 `key=value;` 键值对字符串：
 
 ```text
 VISITOR_INFO1_LIVE=...; HSID=...; SSID=...; APISID=...; SAPISID=...; __Secure-1PSID=...; __Secure-3PSID=...; __Secure-3PAPISID=...
 ```
 
-> 保存后请下拉刷新首页（首页模块有 600 秒缓存），或直接点进「我的音乐库」确认是否已加载出你的「我喜欢的音乐 / 我的歌单」。  
-> **安全提醒**：完整 Cookie 等同于你的 Google 登录态，请勿分享给他人或发到公开页面。
+> 说明：需复制 Network 面板中的完整请求 Cookie（含 `HttpOnly` 会话字段，请勿使用 `document.cookie` 或仅填写单个 `SAPISID` 值）。保存后下拉刷新首页或进入「我的音乐库」即可生效；完整 Cookie 等同于 Google 登录凭证，请妥善保管。
 
 ## 开发
 
