@@ -1,4 +1,4 @@
-import { buildAuthHeaders, isYouTubeHostname, parseHttpsUrlParts, setQueryParams } from "./auth";
+import { buildAuthHeaders, isYouTubeHostname, parseCookieAuthInput, parseHttpsUrlParts, setQueryParams } from "./auth";
 import {
   type AudioFormatPreference,
   buildIosProfile,
@@ -300,7 +300,7 @@ function playbackNonce(): string {
 }
 
 export async function reportPlaybackHistory(videoId: string, config: RuntimeConfig): Promise<void> {
-  if (!config.reportHistory || !config.cookie) {
+  if (!config.reportHistory || !parseCookieAuthInput(config.cookie).hasSapisid) {
     return;
   }
   try {

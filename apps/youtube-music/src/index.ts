@@ -43,7 +43,7 @@ WidgetMetadata = {
       name: "cookie",
       title: "YouTube Music Cookie（可选）",
       description:
-        "可选。填入 music.youtube.com 的 Cookie（含 SAPISID / __Secure-3PAPISID）可解锁个人首页、喜欢的音乐、个人歌单和收听历史；不填可直接使用公开曲库。",
+        "可选。粘贴 music.youtube.com 请求的完整 Cookie 头（或直接粘贴 Network 面板中 browse 请求的 Copy as cURL），不要只填单个 SAPISID 值；不填可直接使用公开曲库。",
       type: "input",
       value: "",
     },

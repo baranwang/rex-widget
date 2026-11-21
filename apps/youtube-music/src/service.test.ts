@@ -355,6 +355,9 @@ describe("Rex YouTube Music widget", () => {
 
   test("loadLibrary requires cookie, sends SAPISIDHASH, filters LM/SE playlists, and handles 401", async () => {
     await expect(loadLibrary({ tab: "liked", page: "1", cookie: "" } as LoadLibraryParams)).rejects.toThrow(/Cookie/);
+    await expect(
+      loadLibrary({ tab: "liked", page: "1", cookie: "AbCdEf123456/XyZ789" } as LoadLibraryParams),
+    ).rejects.toThrow(/Copy as cURL/);
 
     const seenAuthHeaders: Array<string | undefined> = [];
     mockWidgetHttp((options) => {

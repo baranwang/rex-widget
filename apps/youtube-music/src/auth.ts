@@ -119,26 +119,116 @@ export function extractCookieValue(cookieHeader: string, name: string): string {
   return "";
 }
 
+export interface ParsedCookieAuth {
+  cookie: string;
+  authUser: string;
+  pageId?: string;
+  hasSapisid: boolean;
+}
+
+function unescapeSingleQuotedBash(value: string): string {
+  return value.replace(/'\\''/g, "'").trim();
+}
+
+function unescapeDoubleQuoted(value: string): string {
+  return value.replace(/\\(["\\])/g, "$1").trim();
+}
+
+function extractHeaderFromText(text: string, headerName: string): string {
+  const escaped = headerName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const singleQuoted = new RegExp(`(?:^|[\\s\\\\])(?:-H|--header)\\s+'${escaped}:\\s*((?:[^']|'\\\\'')*)'`, "i").exec(
+    text,
+  );
+  if (singleQuoted?.[1]) {
+    return unescapeSingleQuotedBash(singleQuoted[1]);
+  }
+  const doubleQuoted = new RegExp(`(?:^|[\\s\\\\])(?:-H|--header)\\s+"${escaped}:\\s*((?:[^"\\\\]|\\\\.)*)"`, "i").exec(
+    text,
+  );
+  if (doubleQuoted?.[1]) {
+    return unescapeDoubleQuoted(doubleQuoted[1]);
+  }
+  const jsonField = new RegExp(`"${escaped}"\\s*:\\s*"((?:[^"\\\\]|\\\\.)*)"`, "i").exec(text);
+  if (jsonField?.[1]) {
+    return unescapeDoubleQuoted(jsonField[1]);
+  }
+  const rawLine = new RegExp(`^\\s*${escaped}:\\s*(.+)$`, "im").exec(text);
+  if (rawLine?.[1]) {
+    return rawLine[1].trim();
+  }
+  return "";
+}
+
+/**
+ * Normalizes a YouTube Music Cookie input.
+ * Accepts a raw Cookie value, a `Cookie: ...` header line, multi-line Request Headers,
+ * `Copy as cURL` (bash / POSIX / Windows cmd), or `Copy as fetch (Node.js)`.
+ */
+export function parseCookieAuthInput(rawInput: string): ParsedCookieAuth {
+  const trimmed = (rawInput || "").trim();
+  if (!trimmed) {
+    return { cookie: "", authUser: "0", hasSapisid: false };
+  }
+
+  let text = trimmed;
+  if (/(?:^|\s)(?:curl\s+\^"|(?:-H|--header|-b|--cookie)\s+\^")/i.test(text)) {
+    text = text.replace(/\^\r?\n/g, " ").replace(/\^([\s\S])/g, "$1");
+  }
+
+  let cookie = "";
+  const bashCookieFlag = /(?:^|[\s\\])(?:-b|--cookie)\s+'((?:[^']|'\\'')*)'/.exec(text);
+  if (bashCookieFlag?.[1]) {
+    cookie = unescapeSingleQuotedBash(bashCookieFlag[1]);
+  }
+  if (!cookie) {
+    const doubleQuotedCookieFlag = /(?:^|[\s\\])(?:-b|--cookie)\s+"((?:[^"\\]|\\.)*)"/.exec(text);
+    if (doubleQuotedCookieFlag?.[1]) {
+      cookie = unescapeDoubleQuoted(doubleQuotedCookieFlag[1]);
+    }
+  }
+  if (!cookie) {
+    cookie = extractHeaderFromText(text, "cookie");
+  }
+  if (!cookie && !/^\s*(?:curl\s+|fetch\s*\()/i.test(text)) {
+    cookie = text.replace(/\r?\n+/g, "; ").trim();
+  }
+
+  const rawAuthUser = extractHeaderFromText(text, "x-goog-authuser");
+  const authUser = /^\d+$/.test(rawAuthUser) ? rawAuthUser : "0";
+  const rawPageId = extractHeaderFromText(text, "x-goog-pageid");
+  const pageId = rawPageId && /^[A-Za-z0-9_-]+$/.test(rawPageId) ? rawPageId : undefined;
+  const hasSapisid = Boolean(extractCookieValue(cookie, "__Secure-3PAPISID") || extractCookieValue(cookie, "SAPISID"));
+
+  return {
+    cookie,
+    authUser,
+    ...(pageId ? { pageId } : {}),
+    hasSapisid,
+  };
+}
+
 export function buildAuthHeaders(
   cookieHeader: string,
   origin = YTM_SITE,
   nowSeconds = Math.floor(Date.now() / 1000),
 ): Record<string, string> {
-  const trimmed = (cookieHeader || "").trim();
-  if (!trimmed) {
+  const parsed = parseCookieAuthInput(cookieHeader);
+  if (!parsed.cookie) {
     return {};
   }
-  const sapisid = extractCookieValue(trimmed, "__Secure-3PAPISID") || extractCookieValue(trimmed, "SAPISID");
+  const sapisid =
+    extractCookieValue(parsed.cookie, "__Secure-3PAPISID") || extractCookieValue(parsed.cookie, "SAPISID");
   if (!sapisid) {
     return {
-      cookie: trimmed,
+      cookie: parsed.cookie,
     };
   }
   const digest = sha1(`${nowSeconds} ${sapisid} ${origin}`);
   return {
-    cookie: trimmed,
+    cookie: parsed.cookie,
     authorization: `SAPISIDHASH ${nowSeconds}_${digest}`,
-    "x-goog-authuser": "0",
+    "x-goog-authuser": parsed.authUser,
+    ...(parsed.pageId ? { "x-goog-pageid": parsed.pageId } : {}),
   };
 }
 

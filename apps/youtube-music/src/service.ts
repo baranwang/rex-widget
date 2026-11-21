@@ -1,3 +1,4 @@
+import { parseCookieAuthInput } from "./auth";
 import {
   browseById,
   browseContinuation,
@@ -139,7 +140,13 @@ export async function handleHome(
   const config = syncRuntimeConfig(params);
   const filter = (params.filter || "all") as "all" | "songs" | "albums" | "playlists";
   const page = parsePage(params.page);
-  const scope = `home:${config.cookie ? "auth" : "anon"}:${config.language}`;
+  const parsedAuth = parseCookieAuthInput(config.cookie);
+  if (config.cookie && !parsedAuth.hasSapisid) {
+    console.warn(
+      "YouTube Music Cookie appears incomplete (missing SAPISID / __Secure-3PAPISID); falling back to anonymous catalog.",
+    );
+  }
+  const scope = `home:${parsedAuth.hasSapisid ? "auth" : "anon"}:${config.language}`;
 
   let answer: JsonRecord;
   if (page === 1) {
@@ -613,6 +620,14 @@ export async function handleLibrary(
   const config = syncRuntimeConfig(params);
   if (!config.cookie) {
     throw new Error(Widget.i18n("请在模块设置中填写 YouTube Music Cookie 后查看个人音乐库"));
+  }
+  const parsedAuth = parseCookieAuthInput(config.cookie);
+  if (!parsedAuth.cookie || !parsedAuth.hasSapisid) {
+    throw new Error(
+      Widget.i18n(
+        "Cookie 格式不完整：请粘贴完整的 Cookie 请求头（含 SID 与 SAPISID），或直接粘贴 Network 面板中 browse 请求的 Copy as cURL，不能只填单个 SAPISID 值",
+      ),
+    );
   }
 
   const tab = (params.tab || "liked") as "liked" | "playlists" | "history";
