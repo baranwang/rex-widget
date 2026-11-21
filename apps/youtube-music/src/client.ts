@@ -83,7 +83,7 @@ export async function callInnertube<T = JsonRecord>(
       url: `${YTM_SITE}/youtubei/v1/${endpoint}?prettyPrint=false`,
       method: "POST",
       headers,
-      body: {
+      data: {
         context: { client: profile.client },
         ...body,
       },

@@ -5,6 +5,7 @@ type HttpMockHandler = (options: {
   url: string;
   method?: string;
   headers?: Record<string, string>;
+  data?: unknown;
   body?: unknown;
 }) => unknown | Promise<unknown>;
 
@@ -122,6 +123,7 @@ function makeArtistRow(artistId: string, name: string, subscribers = "1M subscri
 
 function mockWidgetHttp(handler: HttpMockHandler) {
   return rs.spyOn(Widget.http, "request").mockImplementation(async (options) => {
+    expect(options.body).toBeUndefined();
     const data = await handler(options);
     return {
       data,
@@ -169,7 +171,7 @@ describe("Rex YouTube Music widget", () => {
 
   test("loadHome loads page 1 and paginates page 2 via stored continuation token", async () => {
     mockWidgetHttp((options) => {
-      const body = options.body as Record<string, unknown>;
+      const body = options.data as Record<string, unknown>;
       if (body.browseId === "FEmusic_home") {
         return {
           contents: {
@@ -232,7 +234,7 @@ describe("Rex YouTube Music widget", () => {
 
   test("loadGenres returns genre directory and supports albums/songs/artists sections", async () => {
     mockWidgetHttp((options) => {
-      const body = options.body as Record<string, unknown>;
+      const body = options.data as Record<string, unknown>;
       if (body.browseId === "FEmusic_moods_and_genres") {
         return {
           contents: [
@@ -284,7 +286,7 @@ describe("Rex YouTube Music widget", () => {
 
   test("loadArtists supports directory, profile, songs, albums, and similar artists", async () => {
     mockWidgetHttp((options) => {
-      const body = options.body as Record<string, unknown>;
+      const body = options.data as Record<string, unknown>;
       if (body.browseId === "FEmusic_charts") {
         return {
           sectionListRenderer: {
@@ -357,7 +359,7 @@ describe("Rex YouTube Music widget", () => {
     const seenAuthHeaders: Array<string | undefined> = [];
     mockWidgetHttp((options) => {
       seenAuthHeaders.push(options.headers?.authorization);
-      const body = options.body as Record<string, unknown>;
+      const body = options.data as Record<string, unknown>;
       if (body.browseId === "FEmusic_liked_playlists") {
         return {
           sectionListRenderer: {
@@ -397,7 +399,7 @@ describe("Rex YouTube Music widget", () => {
 
   test("search supports mixed all results and filtered search with continuation", async () => {
     mockWidgetHttp((options) => {
-      const body = options.body as Record<string, unknown>;
+      const body = options.data as Record<string, unknown>;
       if (options.url.includes("/search") && !body.params && !body.continuation) {
         return {
           sectionListRenderer: {
@@ -469,7 +471,7 @@ describe("Rex YouTube Music widget", () => {
         return { responseContext: { visitorData: "VISITOR_123" } };
       }
       if (options.url.includes("/player")) {
-        const body = options.body as {
+        const body = options.data as {
           context: { client: { clientName: string } };
           playbackContext?: unknown;
         };
@@ -556,7 +558,7 @@ describe("Rex YouTube Music widget", () => {
 
   test("loadDetail resolves album with tracks, duration enrichment, relatedItems, and playlist with continuation", async () => {
     mockWidgetHttp((options) => {
-      const body = options.body as Record<string, unknown>;
+      const body = options.data as Record<string, unknown>;
       if (body.browseId === "MPREb_album1") {
         return {
           header: {
@@ -677,7 +679,7 @@ describe("Rex YouTube Music widget", () => {
         };
       }
       if (options.url.includes("/next")) {
-        const body = options.body as { videoId?: string; playlistId?: string };
+        const body = options.data as { videoId?: string; playlistId?: string };
         expect(body.videoId).toBe("seed_track");
         expect(body.playlistId).toBe("RDAMVMseed_track");
         return {
