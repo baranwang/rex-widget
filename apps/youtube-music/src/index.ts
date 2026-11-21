@@ -31,6 +31,7 @@ WidgetMetadata = {
   requiredVersion: "0.0.7",
   contentType: "music",
   continuousPlay: true,
+  iconurl: "https://music.youtube.com/img/favicon_144.png",
   detailCacheDuration: 60,
   i18n: WIDGET_I18N,
   globalParams: [
