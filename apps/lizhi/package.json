@@ -1,0 +1,35 @@
+{
+  "name": "@rexnow/lizhi",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./dist/lizhi.js",
+  "exports": {
+    ".": "./dist/lizhi.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "NODE_ENV=production rslib build",
+    "dev": "NODE_ENV=development rslib build --watch",
+    "test": "rstest"
+  },
+  "devDependencies": {
+    "@rexnow/libs": "^3.2.1",
+    "@rexnow/rslib-plugin": "^3.2.1",
+    "@rslib/core": "^1.0.7",
+    "@rstest/core": "^0.12.6",
+    "@types/node": "^26.6.6",
+    "typescript": "^7.0.2"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/baranwang/rex-widget.git",
+    "directory": "apps/lizhi"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "license": "MIT"
+}
