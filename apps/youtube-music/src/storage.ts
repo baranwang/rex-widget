@@ -11,6 +11,7 @@ const KEYS = {
   config: "ytm:config",
   visitor: "ytm:visitor",
   tokens: "ytm:tokens",
+  searchSeen: "ytm:searchSeen",
   streams: "ytm:streams",
   songMeta: "ytm:songMeta",
   lastPlayed: "ytm:lastPlayed",
@@ -18,6 +19,7 @@ const KEYS = {
 } as const;
 
 const MAX_TOKEN_ENTRIES = 60;
+const MAX_SEARCH_SEEN_ENTRIES = 20;
 const MAX_STREAM_ENTRIES = 40;
 const MAX_SONG_META_ENTRIES = 120;
 const MAX_RADIO_SEEDS = 12;
@@ -202,6 +204,47 @@ export function setContinuationToken(scope: string, nextPage: number, token: str
     }
   }
   writeStorage(KEYS.tokens, map);
+}
+
+export function clearContinuationTokens(scope: string): void {
+  const existing = readStorage<Record<string, string>>(KEYS.tokens);
+  if (!existing || typeof existing !== "object") {
+    return;
+  }
+  const prefix = `${scope}\u0000`;
+  let changed = false;
+  const next: Record<string, string> = {};
+  for (const [key, value] of Object.entries(existing)) {
+    if (key.startsWith(prefix)) {
+      changed = true;
+      continue;
+    }
+    next[key] = value;
+  }
+  if (changed) {
+    writeStorage(KEYS.tokens, next);
+  }
+}
+
+export function getSearchSeenIds(scope: string): Set<string> {
+  const map = readStorage<Record<string, string[]>>(KEYS.searchSeen);
+  const list = map && typeof map === "object" ? map[scope] : undefined;
+  return new Set(Array.isArray(list) ? list.filter((id): id is string => typeof id === "string") : []);
+}
+
+export function setSearchSeenIds(scope: string, ids: string[]): void {
+  const existing = readStorage<Record<string, string[]>>(KEYS.searchSeen);
+  const map: Record<string, string[]> = existing && typeof existing === "object" ? { ...existing } : {};
+  delete map[scope];
+  map[scope] = Array.from(new Set(ids.filter(Boolean))).slice(0, 60);
+
+  const keys = Object.keys(map);
+  if (keys.length > MAX_SEARCH_SEEN_ENTRIES) {
+    for (const staleKey of keys.slice(0, keys.length - MAX_SEARCH_SEEN_ENTRIES)) {
+      delete map[staleKey];
+    }
+  }
+  writeStorage(KEYS.searchSeen, map);
 }
 
 function isStreamUrlStillFresh(url: string, nowMs: number): boolean {

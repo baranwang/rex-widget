@@ -67,6 +67,7 @@ export async function callInnertube<T = JsonRecord>(
   body: Record<string, unknown>,
   config: RuntimeConfig,
   profile: InnertubeClientProfile = buildWebRemixProfile(config.language),
+  timeoutSeconds = 20,
 ): Promise<T> {
   const auth = profile.anonymous ? {} : buildAuthHeaders(config.cookie, YTM_SITE);
   const headers: Record<string, string> = {
@@ -87,7 +88,7 @@ export async function callInnertube<T = JsonRecord>(
         context: { client: profile.client },
         ...body,
       },
-      timeout: 20,
+      timeout: timeoutSeconds,
     });
     return response.data;
   } catch (error) {
@@ -307,6 +308,8 @@ export async function reportPlaybackHistory(videoId: string, config: RuntimeConf
       "player",
       { videoId, playbackContext: { contentPlaybackContext: {} } },
       config,
+      buildWebRemixProfile(config.language),
+      8,
     );
     const baseUrl = player.playbackTracking?.videostatsPlaybackUrl?.baseUrl;
     if (!baseUrl) {
@@ -329,7 +332,7 @@ export async function reportPlaybackHistory(videoId: string, config: RuntimeConf
         referer: `${YTM_SITE}/`,
         ...buildAuthHeaders(config.cookie, parsed.origin),
       },
-      timeout: 10,
+      timeout: 8,
       decodable: false,
     });
   } catch (error) {

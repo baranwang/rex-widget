@@ -51,15 +51,18 @@ import {
 } from "./parser";
 import {
   cacheSongMetaList,
+  clearContinuationTokens,
   getCachedSongMeta,
   getContinuationToken,
   getLastPlayedVideoId,
   getRadioSeeds,
   getRuntimeConfig,
+  getSearchSeenIds,
   type RuntimeConfig,
   rememberRadioSeeds,
   setContinuationToken,
   setLastPlayedVideoId,
+  setSearchSeenIds,
   syncRuntimeConfig,
 } from "./storage";
 
@@ -683,22 +686,48 @@ export async function handleSearch(
         for (const playlist of section.playlists) out.push(toRexPlaylist(playlist));
       }
       const deduped = dedupeVideoItems(out);
+      clearContinuationTokens(scope);
+      const directToken = nextToken(findOne(answer, "sectionListRenderer")) || rowsOf(answer).token;
+      if (directToken) {
+        setContinuationToken(scope, 2, directToken);
+      }
+      setSearchSeenIds(
+        scope,
+        deduped.map((item) => String(item.id)),
+      );
       cacheSongMetaList(deduped);
       return deduped;
     }
 
-    // Page 2+ on mixed search delegates to songs filter continuation if available.
     const token = getContinuationToken(scope, page);
-    if (!token) {
+    let answer: JsonRecord;
+    if (token) {
+      answer = await callInnertube("search", { continuation: token }, config);
+    } else if (page === 2) {
+      // Unfiltered YouTube Music search typically omits a top-level continuation; continue into filtered songs on page 2.
+      answer = await callInnertube("search", { query, params: SEARCH_FILTERS.songs }, config);
+    } else {
       return [];
     }
-    const answer = await callInnertube("search", { continuation: token }, config);
+
     const { items, token: next } = rowsOf(answer);
     if (next) {
       setContinuationToken(scope, page + 1, next);
     }
-    const tracks = await enrichTrackDurations(ofKind(items, "track"), config);
-    const out = dedupeVideoItems(tracks.map(toRexSong));
+    const seenIds = getSearchSeenIds(scope);
+    const unseen = items.filter((item) => !seenIds.has(item.value.id));
+    const tracks = ofKind(unseen, "track");
+    if (tracks.length) {
+      await enrichTrackDurations(tracks, config);
+    }
+    const out = dedupeVideoItems(
+      unseen.map((item) => {
+        if (item.kind === "artist") return toRexArtist(item.value);
+        if (item.kind === "album") return toRexAlbum(item.value);
+        if (item.kind === "playlist") return toRexPlaylist(item.value);
+        return toRexSong(item.value);
+      }),
+    );
     cacheSongMetaList(out);
     return out;
   }
@@ -718,6 +747,7 @@ export async function handleSearch(
 
   let answer: JsonRecord;
   if (page === 1) {
+    clearContinuationTokens(scope);
     answer = await callInnertube("search", { query, params: filter }, config);
   } else {
     const token = getContinuationToken(scope, page);
@@ -769,8 +799,8 @@ async function loadSongDetail(videoId: string, config: RuntimeConfig): Promise<V
   const stream = await resolveAudioStream(videoId, config);
 
   setLastPlayedVideoId(videoId);
-  // Best-effort optional history reporting (never blocks or fails playback)
-  await reportPlaybackHistory(videoId, config);
+  // Best-effort optional history reporting off the playback critical path
+  void reportPlaybackHistory(videoId, config);
 
   const duration = stream.duration || cachedMeta?.duration || 0;
   const durationText = duration > 0 ? formatDuration(duration) : cachedMeta?.durationText;

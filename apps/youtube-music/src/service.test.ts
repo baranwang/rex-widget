@@ -397,7 +397,7 @@ describe("Rex YouTube Music widget", () => {
     ).rejects.toThrow(/失效|expired/);
   });
 
-  test("search supports mixed all results and filtered search with continuation", async () => {
+  test("search supports mixed all pagination across pages 2+ and filtered search with continuation", async () => {
     mockWidgetHttp((options) => {
       const body = options.data as Record<string, unknown>;
       if (options.url.includes("/search") && !body.params && !body.continuation) {
@@ -436,7 +436,10 @@ describe("Rex YouTube Music widget", () => {
       if (options.url.includes("/search") && body.params) {
         return {
           musicShelfRenderer: {
-            contents: [makeSongRow("vid_s1", "Filtered Song 1", "UC_yoasobi", "YOASOBI", "3:00")],
+            contents: [
+              makeSongRow("vid_1", "Idol", "UC_yoasobi", "YOASOBI", "3:46"),
+              makeSongRow("vid_s1", "Filtered Song 1", "UC_yoasobi", "YOASOBI", "3:00"),
+            ],
             continuations: [{ nextContinuationData: { continuation: "search_tok_2" } }],
           },
         };
@@ -451,21 +454,36 @@ describe("Rex YouTube Music widget", () => {
       return {};
     });
 
-    const mixed = await search({ keyword: "YOASOBI", kind: "all", page: "1" } as SearchParams);
-    expect(mixed.map((item) => item.mediaType)).toEqual(["person", "song"]);
+    const mixedP1 = await search({ keyword: "YOASOBI", kind: "all", page: "1" } as SearchParams);
+    expect(mixedP1.map((item) => item.mediaType)).toEqual(["person", "song"]);
+
+    // Page 2 continues into songs search and skips vid_1 already returned on page 1
+    const mixedP2 = await search({ keyword: "YOASOBI", kind: "all", page: "2" } as SearchParams);
+    expect(mixedP2.map((item) => item.id)).toEqual(["vid_s1"]);
+
+    // Page 3 follows the continuation token stored by page 2, and page 4 ends cleanly
+    const mixedP3 = await search({ keyword: "YOASOBI", kind: "all", page: "3" } as SearchParams);
+    expect(mixedP3.map((item) => item.id)).toEqual(["vid_s2"]);
+
+    const mixedP4 = await search({ keyword: "YOASOBI", kind: "all", page: "4" } as SearchParams);
+    expect(mixedP4).toEqual([]);
 
     const songsP1 = await search({ keyword: "YOASOBI", kind: "songs", page: "1" } as SearchParams);
     const songsP2 = await search({ keyword: "YOASOBI", kind: "songs", page: "2" } as SearchParams);
-    expect(songsP1[0]?.id).toBe("vid_s1");
-    expect(songsP2[0]?.id).toBe("vid_s2");
+    expect(songsP1.map((item) => item.id)).toEqual(["vid_1", "vid_s1"]);
+    expect(songsP2.map((item) => item.id)).toEqual(["vid_s2"]);
   });
 
-  test("loadDetail resolves song via VISIONOS, falls back to IOS, caches stream, and sets app playerType for Opus", async () => {
+  test("loadDetail resolves song via VISIONOS, falls back to IOS, caches stream, and dispatches history reporting off the critical path", async () => {
     const futureExpire = Math.floor(Date.now() / 1000) + 7200;
     let playerCalls = 0;
     const requestedUrls: string[] = [];
+    let releaseHistoryReport: (() => void) | undefined;
+    const historyGate = new Promise<void>((resolve) => {
+      releaseHistoryReport = resolve;
+    });
 
-    mockWidgetHttp((options) => {
+    mockWidgetHttp(async (options) => {
       requestedUrls.push(options.url);
       if (options.url.includes("/visitor_id")) {
         return { responseContext: { visitorData: "VISITOR_123" } };
@@ -476,6 +494,7 @@ describe("Rex YouTube Music widget", () => {
           playbackContext?: unknown;
         };
         if (body.playbackContext) {
+          await historyGate;
           return {
             playbackTracking: {
               videostatsPlaybackUrl: { baseUrl: "https://s.youtube.com/api/stats/playback?ei=abc" },
@@ -539,6 +558,7 @@ describe("Rex YouTube Music widget", () => {
       } as LoadChartsParams),
     ).catch(() => {});
 
+    // loadDetail must resolve immediately even while history reporting is still pending on historyGate
     const detail = (await loadDetail("ytm:song:vid_test_01")) as VideoItem;
     expect(detail.id).toBe("vid_test_01");
     expect(detail.mediaType).toBe("song");
@@ -547,6 +567,11 @@ describe("Rex YouTube Music widget", () => {
     expect(detail.duration).toBe(226);
     expect(detail.durationText).toBe("3:46");
     expect(detail.subtitle).toBe("Test Artist");
+    expect(requestedUrls.some((u) => u.startsWith("https://s.youtube.com/api/stats/playback"))).toBe(false);
+
+    // Release history reporting and verify the tracking ping completes in the background
+    releaseHistoryReport?.();
+    await new Promise((resolve) => setTimeout(resolve, 10));
     expect(requestedUrls.some((u) => u.startsWith("https://s.youtube.com/api/stats/playback"))).toBe(true);
 
     // Second call hits 1-hour stream cache without re-invoking player for stream resolution
