@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, rs, test } from "@rstest/core";
 import {
   handleArtists,
+  handleBanners,
   handleCharts,
   handleDetail,
   handleGenres,
@@ -901,6 +902,123 @@ describe("netease-music service", () => {
       mediaType: "song",
       link: "ncm:song:2134750848",
       title: "睡前故事 01",
+    });
+  });
+
+  test("handleBanners supports selectable client types, filters web ads, and hydrates songs/albums/playlists", async () => {
+    stubHttp((opts) => {
+      if (opts.url.includes("/eapi/v2/banner/get")) {
+        return {
+          data: {
+            code: 200,
+            banners: [
+              {
+                targetId: 0,
+                targetType: 3000,
+                typeTitle: "独家策划",
+                pic: "http://p1.music.126.net/ad.jpg",
+              },
+              {
+                targetId: 1001,
+                targetType: 1,
+                typeTitle: "新歌首发",
+                pic: "http://p1.music.126.net/banner_song.jpg",
+                song: {
+                  id: 1001,
+                  name: "焦点新歌",
+                  dt: 210000,
+                  ar: [{ id: 10, name: "歌手甲" }],
+                  al: { id: 20, name: "专辑甲", picUrl: "http://p3.music.126.net/al1.jpg" },
+                },
+              },
+              {
+                targetId: 1002,
+                targetType: 1,
+                typeTitle: "热歌推荐",
+                imageUrl: "http://p1.music.126.net/banner_pc_song.jpg",
+              },
+              {
+                targetId: 4090,
+                targetType: 10,
+                typeTitle: "新碟首发",
+                pic: "http://p1.music.126.net/banner_album.jpg",
+              },
+              {
+                targetId: 9246,
+                targetType: 1000,
+                typeTitle: "歌单",
+                pic: "http://p1.music.126.net/banner_pl.jpg",
+              },
+            ],
+          },
+        };
+      }
+      if (opts.url.includes("/api/v3/song/detail")) {
+        return {
+          data: {
+            code: 200,
+            songs: [{ id: 1002, name: "PC焦点歌曲", dt: 180000, ar: [{ id: 11, name: "歌手乙" }] }],
+          },
+        };
+      }
+      if (opts.url.includes("/api/v1/album/4090")) {
+        return {
+          data: {
+            code: 200,
+            album: {
+              id: 4090,
+              name: "焦点新碟",
+              picUrl: "http://p3.music.126.net/alb_sq.jpg",
+              artists: [{ id: 12, name: "歌手丙" }],
+            },
+          },
+        };
+      }
+      if (opts.url.includes("/api/v6/playlist/detail")) {
+        return {
+          data: {
+            code: 200,
+            playlist: {
+              id: 9246,
+              name: "焦点歌单",
+              coverImgUrl: "http://p3.music.126.net/pl_sq.jpg",
+              creator: { nickname: "云音乐" },
+            },
+          },
+        };
+      }
+      throw new Error(`Unexpected URL: ${opts.url}`);
+    });
+
+    const items = await handleBanners({ clientType: "pc", page: "1" });
+    expect(items).toHaveLength(4);
+    expect(items[0]).toMatchObject({
+      id: "1001",
+      mediaType: "song",
+      title: "焦点新歌",
+      subtitle: "新歌首发 · 歌手甲",
+      backdropPath: "https://p1.music.126.net/banner_song.jpg",
+      posterPath: "https://p3.music.126.net/al1.jpg?param=500y500",
+    });
+    expect(items[1]).toMatchObject({
+      id: "1002",
+      mediaType: "song",
+      title: "PC焦点歌曲",
+      backdropPath: "https://p1.music.126.net/banner_pc_song.jpg",
+    });
+    expect(items[2]).toMatchObject({
+      id: "4090",
+      mediaType: "album",
+      title: "焦点新碟",
+      backdropPath: "https://p1.music.126.net/banner_album.jpg",
+      posterPath: "https://p3.music.126.net/alb_sq.jpg?param=500y500",
+    });
+    expect(items[3]).toMatchObject({
+      id: "9246",
+      mediaType: "playlist",
+      title: "焦点歌单",
+      backdropPath: "https://p1.music.126.net/banner_pl.jpg",
+      posterPath: "https://p3.music.126.net/pl_sq.jpg?param=500y500",
     });
   });
 });

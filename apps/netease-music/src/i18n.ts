@@ -2,6 +2,8 @@ export const WIDGET_I18N: NonNullable<WidgetMetadata["i18n"]> = {
   en: {
     网易云音乐: "NetEase Cloud Music",
     "网易云音乐 (测试)": "NetEase Cloud Music (Dev)",
+    "网易云音乐插件，支持首页推荐、焦点轮播、精品歌单、排行榜、新歌速递、歌单分类与曲风馆、播客电台、私人与场景漫游、歌手主页、搜索、时间轴歌词、个人音乐库与高解析音频播放":
+      "NetEase Cloud Music plugin supporting Home, Featured Banners, High-Quality Playlists, Charts, New Releases, Categories & Style Hall, Podcasts, Personal & Scene FM, Artists, Search, Synced Lyrics, My Library, and Hi-Res Audio Playback",
     "网易云音乐插件，支持首页推荐、精品歌单、排行榜、新歌速递、歌单分类与曲风馆、播客电台、私人与场景漫游、歌手主页、搜索、时间轴歌词、个人音乐库与高解析音频播放":
       "NetEase Cloud Music plugin supporting Home, High-Quality Playlists, Charts, New Releases, Categories & Style Hall, Podcasts, Personal & Scene FM, Artists, Search, Synced Lyrics, My Library, and Hi-Res Audio Playback",
     "网易云音乐 Cookie（可选）": "NetEase Cloud Music Cookie (Optional)",
@@ -44,6 +46,14 @@ export const WIDGET_I18N: NonNullable<WidgetMetadata["i18n"]> = {
     歌曲: "Songs",
     歌单: "Playlists",
     页码: "Page",
+    焦点轮播: "Featured Banners",
+    "网易云首页轮播焦点推荐，支持切换客户端来源":
+      "NetEase Cloud Music featured banner picks with selectable client source",
+    来源端: "Client Source",
+    "iPad（新歌与新碟，推荐）": "iPad (New Songs & Albums, Recommended)",
+    "PC（桌面端焦点）": "PC (Desktop Picks)",
+    "iPhone（移动端歌单）": "iPhone (Mobile Playlists)",
+    "Android（安卓端歌单）": "Android (Android Playlists)",
     排行榜: "Charts",
     官方榜与全球精选榜单: "Official and global music charts",
     "官方榜、全球精选榜单与歌手榜": "Official charts, global charts, and top artists",
@@ -195,6 +205,8 @@ export const WIDGET_I18N: NonNullable<WidgetMetadata["i18n"]> = {
   "zh-Hant": {
     网易云音乐: "網易雲音樂",
     "网易云音乐 (测试)": "網易雲音樂 (測試)",
+    "网易云音乐插件，支持首页推荐、焦点轮播、精品歌单、排行榜、新歌速递、歌单分类与曲风馆、播客电台、私人与场景漫游、歌手主页、搜索、时间轴歌词、个人音乐库与高解析音频播放":
+      "網易雲音樂插件，支援首頁推薦、焦點輪播、精品歌單、排行榜、新歌速遞、歌單分類與曲風館、播客電台、私人與場景漫遊、歌手主頁、搜尋、時間軸歌詞、個人音樂庫與高解析音訊播放",
     "网易云音乐插件，支持首页推荐、精品歌单、排行榜、新歌速递、歌单分类与曲风馆、播客电台、私人与场景漫游、歌手主页、搜索、时间轴歌词、个人音乐库与高解析音频播放":
       "網易雲音樂插件，支援首頁推薦、精品歌單、排行榜、新歌速遞、歌單分類與曲風館、播客電台、私人與場景漫遊、歌手主頁、搜尋、時間軸歌詞、個人音樂庫與高解析音訊播放",
     "网易云音乐 Cookie（可选）": "網易雲音樂 Cookie（選填）",
@@ -237,6 +249,13 @@ export const WIDGET_I18N: NonNullable<WidgetMetadata["i18n"]> = {
     歌曲: "歌曲",
     歌单: "歌單",
     页码: "頁碼",
+    焦点轮播: "焦點輪播",
+    "网易云首页轮播焦点推荐，支持切换客户端来源": "網易雲首頁輪播焦點推薦，支援切換用戶端來源",
+    来源端: "來源端",
+    "iPad（新歌与新碟，推荐）": "iPad（新歌與新碟，推薦）",
+    "PC（桌面端焦点）": "PC（桌面端焦點）",
+    "iPhone（移动端歌单）": "iPhone（行動端歌單）",
+    "Android（安卓端歌单）": "Android（安卓端歌單）",
     排行榜: "排行榜",
     官方榜与全球精选榜单: "官方榜與全球精選榜單",
     "官方榜、全球精选榜单与歌手榜": "官方榜、全球精選榜單與歌手榜",

@@ -1,6 +1,7 @@
 import { WIDGET_I18N } from "./i18n";
 import {
   handleArtists,
+  handleBanners,
   handleCharts,
   handleDetail,
   handleGenres,
@@ -27,7 +28,7 @@ WidgetMetadata = {
   id: "baranwang.music.netease",
   title: process.env.NODE_ENV === "production" ? "网易云音乐" : "网易云音乐 (测试)",
   description:
-    "网易云音乐插件，支持首页推荐、精品歌单、排行榜、新歌速递、歌单分类与曲风馆、播客电台、私人与场景漫游、歌手主页、搜索、时间轴歌词、个人音乐库与高解析音频播放",
+    "网易云音乐插件，支持首页推荐、焦点轮播、精品歌单、排行榜、新歌速递、歌单分类与曲风馆、播客电台、私人与场景漫游、歌手主页、搜索、时间轴歌词、个人音乐库与高解析音频播放",
   author: "Baran",
   version: widgetVersion,
   site: "https://github.com/baranwang/rex-widget/tree/main/apps/netease-music",
@@ -120,6 +121,33 @@ WidgetMetadata = {
             { title: "精品歌单", value: "highquality" },
             { title: "歌曲", value: "songs" },
             { title: "歌单", value: "playlists" },
+          ],
+        },
+        {
+          name: "page",
+          title: "页码",
+          type: "page",
+        },
+      ],
+    },
+    {
+      id: "banners",
+      title: "焦点轮播",
+      subtitle: "网易云首页轮播焦点推荐，支持切换客户端来源",
+      type: "video",
+      functionName: "loadBanners",
+      cacheDuration: 600,
+      params: [
+        {
+          name: "clientType",
+          title: "来源端",
+          type: "enumeration",
+          value: "ipad",
+          enumOptions: [
+            { title: "iPad（新歌与新碟，推荐）", value: "ipad" },
+            { title: "PC（桌面端焦点）", value: "pc" },
+            { title: "iPhone（移动端歌单）", value: "iphone" },
+            { title: "Android（安卓端歌单）", value: "android" },
           ],
         },
         {
@@ -456,6 +484,8 @@ WidgetMetadata = {
 };
 
 loadHome = async (params) => handleHome(params);
+
+loadBanners = async (params) => handleBanners(params);
 
 loadCharts = async (params) => handleCharts(params);
 

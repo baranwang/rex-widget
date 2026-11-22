@@ -16,6 +16,7 @@ import {
   ARTIST_TYPE_CODES,
   type ArtistArea,
   type ArtistType,
+  type BannerClientType,
   CHART_ARTIST_AREA_CODES,
   CURATED_GENRES,
   DEFAULT_PAGE_SIZE,
@@ -28,6 +29,7 @@ import {
   MAX_PLAYLIST_TRACKS,
   MAX_PODCAST_PROGRAMS,
   NEW_SONG_AREA_IDS,
+  normalizeHttpsUrl,
   PRIVATE_RADAR_PLAYLIST_ID,
   parseDetailLink,
   playlistLink,
@@ -375,6 +377,204 @@ export async function handleHome(
     );
     if (failed?.status === "rejected") {
       throw failed.reason;
+    }
+  }
+
+  const deduped = dedupeVideoItems(out);
+  cacheTracks(allTracks, deduped);
+  return sliceByPage(deduped, params);
+}
+
+interface RawBannerItem {
+  targetId?: number | string;
+  targetType?: number | string;
+  typeTitle?: string;
+  pic?: string;
+  imageUrl?: string;
+  song?: unknown;
+}
+
+function normalizeBannerClientType(value?: string): BannerClientType {
+  if (value === "pc" || value === "iphone" || value === "android" || value === "ipad") {
+    return value;
+  }
+  return "ipad";
+}
+
+function attachBannerMedia(item: VideoItem, bannerImage: string | undefined, typeTitle: string): VideoItem {
+  const subtitleParts = [typeTitle, item.subtitle || ""].filter(Boolean);
+  const subtitle = subtitleParts.join(" · ") || undefined;
+  return {
+    ...item,
+    ...(subtitle ? { subtitle } : {}),
+    ...(bannerImage ? { backdropPath: bannerImage } : {}),
+    ...(!item.posterPath && bannerImage ? { posterPath: bannerImage } : {}),
+    ...(bannerImage ? { coverUrl: bannerImage } : {}),
+  };
+}
+
+export async function handleBanners(
+  params: CommonGlobalParams & PaginationParams & { clientType?: string },
+): Promise<VideoItem[]> {
+  const config = syncRuntimeConfig(params);
+  const clientType = normalizeBannerClientType(params.clientType);
+
+  const response = await eapiRequest<{ banners?: RawBannerItem[] }>("/api/v2/banner/get", { clientType }, config);
+  const rawBanners = Array.isArray(response.banners) ? response.banners : [];
+
+  const playable = rawBanners
+    .map((entry) => {
+      const targetId = entry?.targetId !== undefined ? String(entry.targetId).trim() : "";
+      const targetType = Number(entry?.targetType) || 0;
+      const bannerImage = normalizeHttpsUrl(
+        typeof entry?.pic === "string" ? entry.pic : typeof entry?.imageUrl === "string" ? entry.imageUrl : undefined,
+      );
+      const typeTitle = typeof entry?.typeTitle === "string" ? entry.typeTitle.trim() : "";
+      const embeddedSong = targetType === 1 ? parseTrack(entry?.song) : null;
+      return { targetId, targetType, bannerImage, typeTitle, embeddedSong };
+    })
+    .filter(
+      (entry) =>
+        isValidNumericId(entry.targetId) &&
+        entry.targetId !== "0" &&
+        (entry.targetType === 1 || entry.targetType === 10 || entry.targetType === 1000 || entry.targetType === 1009),
+    );
+
+  if (!playable.length) {
+    return [];
+  }
+
+  const missingSongIds = playable
+    .filter((entry) => entry.targetType === 1 && !entry.embeddedSong)
+    .map((entry) => entry.targetId);
+  const albumIds = Array.from(
+    new Set(playable.filter((entry) => entry.targetType === 10).map((entry) => entry.targetId)),
+  );
+  const playlistIds = Array.from(
+    new Set(playable.filter((entry) => entry.targetType === 1000).map((entry) => entry.targetId)),
+  );
+  const djIds = Array.from(
+    new Set(playable.filter((entry) => entry.targetType === 1009).map((entry) => entry.targetId)),
+  );
+
+  const [fetchedSongsRes, albumResults, playlistResults, djResults] = await Promise.all([
+    missingSongIds.length
+      ? fetchSongDetails(missingSongIds, config).catch(() => [] as NcmTrackRef[])
+      : Promise.resolve([] as NcmTrackRef[]),
+    Promise.allSettled(
+      albumIds.map((id) => webRequest<{ album?: JsonRecord }>(`/api/v1/album/${id}`, {}, config, { timeout: 8 })),
+    ),
+    Promise.allSettled(
+      playlistIds.map((id) =>
+        webRequest<{ playlist?: JsonRecord }>("/api/v6/playlist/detail", { id, n: 0, s: 0 }, config, {
+          method: "POST",
+          timeout: 8,
+        }),
+      ),
+    ),
+    Promise.allSettled(
+      djIds.map((id) => eapiRequest<{ data?: JsonRecord }>("/api/djradio/v2/get", { id }, config, { timeout: 8 })),
+    ),
+  ]);
+
+  const songMap = new Map<string, NcmTrackRef>();
+  for (const track of fetchedSongsRes) {
+    songMap.set(track.id, track);
+  }
+  const albumMap = new Map<string, NcmAlbumRef>();
+  for (let i = 0; i < albumIds.length; i++) {
+    const res = albumResults[i];
+    if (res.status === "fulfilled") {
+      const parsed = parseAlbum(res.value.album);
+      if (parsed) albumMap.set(albumIds[i], parsed);
+    }
+  }
+  const playlistMap = new Map<string, NcmPlaylistRef>();
+  for (let i = 0; i < playlistIds.length; i++) {
+    const res = playlistResults[i];
+    if (res.status === "fulfilled") {
+      const parsed = parsePlaylist(res.value.playlist);
+      if (parsed) playlistMap.set(playlistIds[i], parsed);
+    }
+  }
+  const djMap = new Map<string, NcmDjRadioRef>();
+  for (let i = 0; i < djIds.length; i++) {
+    const res = djResults[i];
+    if (res.status === "fulfilled") {
+      const parsed = parseDjRadio(res.value.data);
+      if (parsed) djMap.set(djIds[i], parsed);
+    }
+  }
+
+  const out: VideoItem[] = [];
+  const allTracks: NcmTrackRef[] = [];
+
+  for (const entry of playable) {
+    if (entry.targetType === 1) {
+      const track = entry.embeddedSong ?? songMap.get(entry.targetId);
+      if (track) {
+        allTracks.push(track);
+        out.push(attachBannerMedia(toRexSong(track), entry.bannerImage, entry.typeTitle));
+      } else {
+        out.push(
+          attachBannerMedia(
+            {
+              id: entry.targetId,
+              type: "url",
+              mediaType: "song",
+              link: songLink(entry.targetId),
+              title: entry.typeTitle || entry.targetId,
+            },
+            entry.bannerImage,
+            "",
+          ),
+        );
+      }
+      continue;
+    }
+
+    if (entry.targetType === 10) {
+      const album = albumMap.get(entry.targetId);
+      const baseItem: VideoItem = album
+        ? toRexAlbum(album)
+        : {
+            id: entry.targetId,
+            type: "url",
+            mediaType: "album",
+            link: `ncm:album:${entry.targetId}`,
+            title: entry.typeTitle || entry.targetId,
+          };
+      out.push(attachBannerMedia(baseItem, entry.bannerImage, album ? entry.typeTitle : ""));
+      continue;
+    }
+
+    if (entry.targetType === 1000) {
+      const playlist = playlistMap.get(entry.targetId);
+      const baseItem: VideoItem = playlist
+        ? toRexPlaylist(playlist)
+        : {
+            id: entry.targetId,
+            type: "url",
+            mediaType: "playlist",
+            link: playlistLink(entry.targetId),
+            title: entry.typeTitle || entry.targetId,
+          };
+      out.push(attachBannerMedia(baseItem, entry.bannerImage, playlist ? entry.typeTitle : ""));
+      continue;
+    }
+
+    if (entry.targetType === 1009) {
+      const radio = djMap.get(entry.targetId);
+      const baseItem: VideoItem = radio
+        ? toRexDjRadio(radio)
+        : {
+            id: `dj:${entry.targetId}`,
+            type: "url",
+            mediaType: "playlist",
+            link: djLink(entry.targetId),
+            title: entry.typeTitle || entry.targetId,
+          };
+      out.push(attachBannerMedia(baseItem, entry.bannerImage, radio ? entry.typeTitle : ""));
     }
   }
 
