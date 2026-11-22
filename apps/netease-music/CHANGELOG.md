@@ -1,5 +1,11 @@
 # @rexnow/netease-music
 
+## 0.2.1
+
+### Patch Changes
+
+- 95cfda3: Populate covers for all curated and high-quality music genre cards (with 24h cache and clean unwatermarked 500x500 artwork), and hydrate missing artist avatars inside genres and radios via Style Hall, Artist List, and batched `/api/batch` lookups (with 7d cache).
+
 ## 0.2.0
 
 ### Minor Changes
