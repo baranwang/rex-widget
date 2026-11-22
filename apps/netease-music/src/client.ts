@@ -1,7 +1,10 @@
 import { extractManagedSetCookies, parseCookieAuthInput, serializeCookiePairs } from "./auth";
 import {
+  EAPI_ANDROID_UA,
   EAPI_CLIENT,
+  EAPI_CLIENT_ANDROID,
   EAPI_UA,
+  isFlacQuality,
   NCM_EAPI_HOST,
   NCM_SITE,
   normalizeHttpsUrl,
@@ -10,6 +13,7 @@ import {
   WEB_UA,
 } from "./constants";
 import { encodeEapiPayload } from "./crypto";
+import type { NeteaseLyricResponse } from "./lyrics";
 import { type JsonRecord, type NcmTrackRef, parseTrack } from "./parser";
 import {
   applyServerCookieUpdate,
@@ -193,14 +197,17 @@ export async function eapiRequest<T extends JsonRecord = JsonRecord>(
   path: string,
   payload: Record<string, unknown>,
   config: RuntimeConfig,
-  options: { allowedCodes?: readonly number[]; timeout?: number } = {},
+  options: { allowedCodes?: readonly number[]; timeout?: number; clientProfile?: "pc" | "android" } = {},
 ): Promise<T> {
   const cookies = buildMergedCookies(config);
   const now = Date.now();
   const deviceId = getOrCreateDeviceId();
+  const useAndroid = options.clientProfile === "android";
+  const client = useAndroid ? EAPI_CLIENT_ANDROID : EAPI_CLIENT;
+  const userAgent = useAndroid ? EAPI_ANDROID_UA : EAPI_UA;
 
   const header: Record<string, string> = {
-    ...EAPI_CLIENT,
+    ...client,
     deviceId,
     mobilename: "",
     buildver: String(Math.floor(now / 1000)),
@@ -230,7 +237,7 @@ export async function eapiRequest<T extends JsonRecord = JsonRecord>(
     method: "POST",
     headers: {
       "content-type": "application/x-www-form-urlencoded",
-      "user-agent": EAPI_UA,
+      "user-agent": userAgent,
       cookie: eapiCookie,
     },
     data: `params=${encrypted}`,
@@ -322,21 +329,25 @@ export async function resolveAudioStream(songId: string, config: RuntimeConfig):
     };
   }
 
-  const encodeType = config.quality === "lossless" || config.quality === "hires" ? "flac" : "mp3";
+  const encodeType = config.quality === "vivid" ? "mp3" : isFlacQuality(config.quality) ? "flac" : "mp3";
+  const clientProfile: "pc" | "android" = config.quality === "vivid" ? "android" : "pc";
+  const v1Payload: Record<string, unknown> = {
+    ids: `[${songId}]`,
+    level: config.quality,
+    encodeType,
+  };
+  if (config.quality === "sky") {
+    v1Payload.immerseType = "c51";
+  }
+
   let entries: SongUrlEntry[] = [];
 
   try {
     const response = await withTransientRetry(
       () =>
-        eapiRequest<{ data?: SongUrlEntry[] }>(
-          "/api/song/enhance/player/url/v1",
-          {
-            ids: `[${songId}]`,
-            level: config.quality,
-            encodeType,
-          },
-          config,
-        ),
+        eapiRequest<{ data?: SongUrlEntry[] }>("/api/song/enhance/player/url/v1", v1Payload, config, {
+          clientProfile,
+        }),
       3,
     );
     entries = Array.isArray(response.data) ? response.data : [];
@@ -375,7 +386,7 @@ export async function resolveAudioStream(songId: string, config: RuntimeConfig):
   }
 
   const rawFormat = (
-    chosen.type || (chosen.level === "lossless" || chosen.level === "hires" ? "flac" : "mp3")
+    chosen.type || (chosen.level && isFlacQuality(chosen.level as RuntimeConfig["quality"]) ? "flac" : "mp3")
   ).toLowerCase();
   const format = SUPPORTED_FORMATS.has(rawFormat) ? rawFormat : "mp3";
   const level = typeof chosen.level === "string" && chosen.level ? chosen.level : config.quality;
@@ -400,4 +411,81 @@ export async function resolveAudioStream(songId: string, config: RuntimeConfig):
       Referer: `${NCM_SITE}/`,
     },
   };
+}
+
+export async function fetchSongLyric(songId: string, config: RuntimeConfig): Promise<NeteaseLyricResponse> {
+  return eapiRequest<NeteaseLyricResponse & JsonRecord>(
+    "/api/song/lyric",
+    {
+      id: songId,
+      tv: -1,
+      lv: -1,
+      rv: -1,
+      kv: -1,
+      _nmclfl: 1,
+    },
+    config,
+    { timeout: 10 },
+  );
+}
+
+export async function fetchSongDynamicCover(songId: string, config: RuntimeConfig): Promise<string | undefined> {
+  if (!parseCookieAuthInput(config.cookie).hasMusicU) {
+    return undefined;
+  }
+  const response = await eapiRequest<{ data?: { videoPlayUrl?: string } }>(
+    "/api/songplay/dynamic-cover",
+    { songId },
+    config,
+    { timeout: 6 },
+  );
+  return normalizeHttpsUrl(response.data?.videoPlayUrl);
+}
+
+export async function fetchMvUrl(mvId: number, config: RuntimeConfig): Promise<string | undefined> {
+  if (!Number.isFinite(mvId) || mvId <= 0) {
+    return undefined;
+  }
+  const response = await eapiRequest<{ data?: { url?: string } }>(
+    "/api/song/enhance/play/mv/url",
+    { id: Math.floor(mvId), r: 1080 },
+    config,
+    { timeout: 6 },
+  );
+  return normalizeHttpsUrl(response.data?.url);
+}
+
+export async function scrobbleSong(
+  songId: string,
+  sourceId: string | undefined,
+  durationSec: number,
+  config: RuntimeConfig,
+): Promise<void> {
+  if (!config.reportHistory || !parseCookieAuthInput(config.cookie).hasMusicU) {
+    return;
+  }
+  await eapiRequest(
+    "/api/feedback/weblog",
+    {
+      logs: JSON.stringify([
+        {
+          action: "play",
+          json: {
+            download: 0,
+            end: "playend",
+            id: songId,
+            sourceId: sourceId || "",
+            time: Math.max(0, Math.round(durationSec)),
+            type: "song",
+            wifi: 0,
+            source: "list",
+            mainsite: 1,
+            content: "",
+          },
+        },
+      ]),
+    },
+    config,
+    { timeout: 6 },
+  );
 }

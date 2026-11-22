@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import { describe, expect, test } from "@rstest/core";
 import { EAPI_KEY } from "./constants";
-import { aes128EcbEncryptHex, encodeEapiPayload, md5Hex, utf8Bytes } from "./crypto";
+import { aes128EcbEncryptHex, base64EncodeUtf8, encodeEapiPayload, md5Hex, utf8Bytes } from "./crypto";
 
 function nodeAes128EcbHex(plaintext: string, key = EAPI_KEY): string {
   const cipher = crypto.createCipheriv("aes-128-ecb", Buffer.from(key, "utf8"), null);
@@ -16,6 +16,13 @@ describe("crypto", () => {
     const samples = ["", "hello world", "网易云音乐 123", "🎵🎧🎶", "aé中🚀"];
     for (const sample of samples) {
       expect(Array.from(utf8Bytes(sample))).toEqual(Array.from(Buffer.from(sample, "utf8")));
+    }
+  });
+
+  test("base64EncodeUtf8 matches Buffer.toString('base64') across padding boundaries", () => {
+    const samples = ["", "a", "ab", "abc", "abcd", "网易云歌词 [00:01.00] 晴天 🎵"];
+    for (const sample of samples) {
+      expect(base64EncodeUtf8(sample)).toBe(Buffer.from(sample, "utf8").toString("base64"));
     }
   });
 

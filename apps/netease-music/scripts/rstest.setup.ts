@@ -10,8 +10,10 @@ const widgetGlobals = [
   "loadNewReleases",
   "loadGenres",
   "loadRadios",
+  "loadPodcasts",
   "loadArtists",
   "loadLibrary",
+  "loadSubtitle",
   "search",
   "loadDetail",
 ];

@@ -6,25 +6,36 @@ import {
   formatReleaseDate,
   parseAlbum,
   parseArtist,
+  parseDjProgram,
+  parseDjRadio,
   parsePlaylist,
+  parseStyleTag,
   parseTrack,
   toRexAlbum,
   toRexArtist,
+  toRexDjProgram,
+  toRexDjRadio,
   toRexPlaylist,
   toRexSong,
 } from "./parser";
 
 describe("constants & parser", () => {
-  test("parseDetailLink parses internal and official web links", () => {
+  test("parseDetailLink parses internal and official web links including DJ radios", () => {
     expect(parseDetailLink("ncm:song:186016")).toEqual({ kind: "song", id: "186016" });
     expect(parseDetailLink("ncm:album:18886")).toEqual({ kind: "album", id: "18886" });
     expect(parseDetailLink("ncm:playlist:3778678")).toEqual({ kind: "playlist", id: "3778678" });
+    expect(parseDetailLink("ncm:dj:1230174483")).toEqual({ kind: "dj", id: "1230174483" });
     expect(parseDetailLink("https://music.163.com/#/song?id=186016")).toEqual({ kind: "song", id: "186016" });
     expect(parseDetailLink("https://music.163.com/playlist?id=3778678&userid=1")).toEqual({
       kind: "playlist",
       id: "3778678",
     });
     expect(parseDetailLink("https://music.163.com/#/album?id=18886")).toEqual({ kind: "album", id: "18886" });
+    expect(parseDetailLink("https://music.163.com/#/djradio?id=1230174483")).toEqual({
+      kind: "dj",
+      id: "1230174483",
+    });
+    expect(parseDetailLink("ncm:hot:%E6%99%B4%E5%A4%A9")).toEqual({ kind: "hot", keyword: "晴天" });
     expect(parseDetailLink("ncm:song:invalid")).toBeNull();
   });
 
@@ -38,24 +49,27 @@ describe("constants & parser", () => {
     expect(formatCoverUrl("https://example.com/cover.png")).toBe("https://example.com/cover.png");
   });
 
-  test("resolvePlayerType routes FLAC to app decoder in auto mode", () => {
+  test("resolvePlayerType routes FLAC and ALAC to app decoder in auto mode", () => {
     expect(resolvePlayerType("auto", "flac")).toBe("app");
+    expect(resolvePlayerType("auto", "alac")).toBe("app");
     expect(resolvePlayerType("auto", "mp3")).toBeUndefined();
     expect(resolvePlayerType("system", "flac")).toBe("system");
     expect(resolvePlayerType("app", "mp3")).toBe("app");
   });
 
-  test("parses NetEase track, album, playlist, and artist shapes into Rex VideoItems", () => {
+  test("parses NetEase track, album, playlist, artist, DJ radio/program, and style tag shapes", () => {
     const track = parseTrack({
       id: 186016,
       name: "晴天",
       dt: 269000,
+      mv: 5300126,
       ar: [{ id: 6452, name: "周杰伦" }],
       al: { id: 18907, name: "叶惠美", picUrl: "http://p1.music.126.net/a/b.jpg" },
     });
     if (!track) {
       throw new Error("Expected parsed track");
     }
+    expect(track.mvId).toBe(5300126);
     const rexSong = toRexSong(track);
     expect(rexSong).toMatchObject({
       id: "186016",
@@ -91,11 +105,15 @@ describe("constants & parser", () => {
       name: "叶惠美",
       publishTime: Date.UTC(2003, 6, 31),
       picUrl: "http://p1.music.126.net/a/b.jpg",
+      company: "杰威尔音乐",
+      subType: "录音室版",
       artists: [{ id: 6452, name: "周杰伦" }],
     });
     if (!album) {
       throw new Error("Expected parsed album");
     }
+    expect(album.company).toBe("杰威尔音乐");
+    expect(album.subType).toBe("录音室版");
     expect(toRexAlbum(album)).toMatchObject({
       id: "18907",
       mediaType: "album",
@@ -108,6 +126,7 @@ describe("constants & parser", () => {
       name: "热歌榜",
       coverImgUrl: "http://p1.music.126.net/chart.jpg",
       updateFrequency: "每天更新",
+      tags: ["华语", "流行"],
       tracks: [{ first: "晴天", second: "周杰伦" }],
     });
     if (!playlist) {
@@ -118,6 +137,10 @@ describe("constants & parser", () => {
       mediaType: "playlist",
       link: "ncm:playlist:3778678",
       description: "每天更新\n1. 晴天 · 周杰伦",
+      genreItems: [
+        { id: "ncm:genre:华语", title: "华语" },
+        { id: "ncm:genre:流行", title: "流行" },
+      ],
     });
 
     const artist = parseArtist({
@@ -135,6 +158,55 @@ describe("constants & parser", () => {
       mediaType: "person",
       title: "周杰伦",
       subtitle: "Jay Chou",
+    });
+
+    const djRadio = parseDjRadio({
+      id: 1230174483,
+      name: "你，静不下来",
+      picUrl: "http://p4.music.126.net/dj.jpg",
+      dj: { nickname: "李静" },
+      category: "情感",
+    });
+    if (!djRadio) {
+      throw new Error("Expected parsed DJ radio");
+    }
+    expect(toRexDjRadio(djRadio)).toMatchObject({
+      id: "dj:1230174483",
+      mediaType: "playlist",
+      link: "ncm:dj:1230174483",
+      subtitle: "李静 · 情感",
+    });
+
+    const djProgram = parseDjProgram({
+      id: 3733590632,
+      name: "老友对谈 vol.44",
+      duration: 3600000,
+      mainSong: { id: 3463048462 },
+      dj: { nickname: "李静" },
+      radio: { name: "你，静不下来" },
+    });
+    if (!djProgram) {
+      throw new Error("Expected parsed DJ program");
+    }
+    expect(toRexDjProgram(djProgram)).toMatchObject({
+      id: "3463048462",
+      mediaType: "song",
+      link: "ncm:song:3463048462",
+      title: "老友对谈 vol.44",
+      duration: 3600,
+    });
+
+    const styleTag = parseStyleTag({
+      tagId: 1000,
+      tagName: "流行",
+      enName: "Pop",
+      picUrl: "http://p6.music.126.net/pop.jpg",
+    });
+    expect(styleTag).toMatchObject({
+      tagId: "1000",
+      tagName: "流行",
+      enName: "Pop",
+      imageUrl: "https://p6.music.126.net/pop.jpg?param=500y500",
     });
 
     expect(formatDuration(3661)).toBe("1:01:01");
