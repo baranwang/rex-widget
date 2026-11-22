@@ -4,6 +4,7 @@ import {
   EAPI_CLIENT,
   EAPI_CLIENT_ANDROID,
   EAPI_UA,
+  formatCoverUrl,
   isFlacQuality,
   NCM_EAPI_HOST,
   NCM_SITE,
@@ -17,7 +18,9 @@ import type { NeteaseLyricResponse } from "./lyrics";
 import { type JsonRecord, type NcmTrackRef, parseTrack } from "./parser";
 import {
   applyServerCookieUpdate,
+  cacheArtistAvatars,
   getCachedAccount,
+  getCachedArtistAvatars,
   getCachedStream,
   getOrCreateDeviceId,
   getServerCookies,
@@ -488,4 +491,76 @@ export async function scrobbleSong(
     config,
     { timeout: 6 },
   );
+}
+
+const ARTIST_BATCH_SIZE = 15;
+const MAX_ARTIST_BATCH_LOOKUPS = 30;
+
+export async function fetchArtistAvatarsBatch(
+  artistIds: readonly string[],
+  config: RuntimeConfig,
+): Promise<Record<string, string>> {
+  const uniqueIds = Array.from(new Set(artistIds.filter((id) => /^\d+$/.test(id)))).slice(0, MAX_ARTIST_BATCH_LOOKUPS);
+  if (!uniqueIds.length) {
+    return {};
+  }
+
+  const cached = getCachedArtistAvatars();
+  const result: Record<string, string> = {};
+  const missing: string[] = [];
+  for (const id of uniqueIds) {
+    if (cached[id]) {
+      result[id] = cached[id];
+    } else {
+      missing.push(id);
+    }
+  }
+
+  if (!missing.length) {
+    return result;
+  }
+
+  const newlyFetched: Record<string, string> = {};
+  const chunks: string[][] = [];
+  for (let i = 0; i < missing.length; i += ARTIST_BATCH_SIZE) {
+    chunks.push(missing.slice(i, i + ARTIST_BATCH_SIZE));
+  }
+
+  const batchResponses = await Promise.allSettled(
+    chunks.map((chunk) => {
+      const payload: Record<string, string> = {};
+      for (const id of chunk) {
+        payload[`/api/v1/artist/${id}`] = "{}";
+      }
+      return eapiRequest<Record<string, { artist?: { img1v1Url?: string; picUrl?: string; avatar?: string } }>>(
+        "/api/batch",
+        payload,
+        config,
+        { timeout: 10 },
+      );
+    }),
+  );
+
+  for (let i = 0; i < chunks.length; i++) {
+    const res = batchResponses[i];
+    if (res.status !== "fulfilled" || !res.value) {
+      continue;
+    }
+    for (const id of chunks[i]) {
+      const entry = res.value[`/api/v1/artist/${id}`];
+      const artist = entry?.artist;
+      const rawUrl = artist?.img1v1Url || artist?.picUrl || artist?.avatar;
+      const avatar = formatCoverUrl(typeof rawUrl === "string" ? rawUrl : undefined);
+      if (avatar) {
+        result[id] = avatar;
+        newlyFetched[id] = avatar;
+      }
+    }
+  }
+
+  if (Object.keys(newlyFetched).length) {
+    cacheArtistAvatars(newlyFetched);
+  }
+
+  return result;
 }

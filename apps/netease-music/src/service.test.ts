@@ -128,20 +128,114 @@ describe("netease-music service", () => {
     expect(String(spy.mock.calls[1]?.[0]?.data)).toContain("areaId=8");
   });
 
-  test("handleGenres lists curated categories and loads category playlists", async () => {
+  test("handleGenres lists curated categories with covers and loads category playlists & artist avatars", async () => {
+    stubHttp((opts) => {
+      if (opts.url.includes("/eapi/tag/list/get")) {
+        return {
+          data: {
+            code: 200,
+            data: [{ tagId: 1028, tagName: "R&B", picUrl: "http://p6.music.126.net/rnb.jpg" }],
+          },
+        };
+      }
+      if (opts.url.includes("/eapi/playlist/list")) {
+        return {
+          data: {
+            code: 200,
+            playlists: [
+              {
+                id: 7001,
+                name: "华语精选",
+                coverImgUrl: "http://p1.music.126.net/zh.jpg?imageView=1&thumbnail=140y140",
+              },
+            ],
+          },
+        };
+      }
+      if (opts.url.includes("/api/playlist/list")) {
+        return {
+          data: {
+            code: 200,
+            playlists: [{ id: 7001, name: "华语精选", creator: { nickname: "云音乐" } }],
+          },
+        };
+      }
+      if (opts.url.includes("/eapi/style-tag/home/artist")) {
+        return {
+          data: {
+            code: 200,
+            data: { artists: [{ id: 8325, name: "林忆莲", img1v1Url: "http://p3.music.126.net/sandy.jpg" }] },
+          },
+        };
+      }
+      if (opts.url.includes("/eapi/v1/artist/list")) {
+        return {
+          data: {
+            code: 200,
+            artists: [{ id: 6452, name: "周杰伦", img1v1Url: "http://p4.music.126.net/jay.jpg" }],
+          },
+        };
+      }
+      if (opts.url.includes("/api/v6/playlist/detail")) {
+        return {
+          data: {
+            code: 200,
+            playlist: {
+              id: 7001,
+              name: "治愈歌单",
+              tracks: [{ id: 101, name: "晚安", dt: 200000, ar: [{ id: 9001, name: "治愈歌手" }] }],
+              trackIds: [{ id: 101 }],
+            },
+          },
+        };
+      }
+      if (opts.url.includes("/eapi/batch")) {
+        return {
+          data: {
+            code: 200,
+            "/api/v1/artist/9001": {
+              artist: { id: 9001, name: "治愈歌手", img1v1Url: "http://p3.music.126.net/heal.jpg" },
+            },
+          },
+        };
+      }
+      throw new Error(`Unexpected URL: ${opts.url}`);
+    });
+
     const categories = await handleGenres({});
     expect(categories.length).toBeGreaterThan(10);
-    expect(categories[0]).toMatchObject({ mediaType: "genre", link: "ncm:genre:华语" });
+    expect(categories[0]).toMatchObject({
+      mediaType: "genre",
+      link: "ncm:genre:华语",
+      posterPath: "https://p1.music.126.net/zh.jpg?param=500y500",
+    });
+    const rnb = categories.find((c) => c.id === "R&B/Soul");
+    expect(rnb?.posterPath).toBe("https://p6.music.126.net/rnb.jpg?param=500y500");
 
-    stubHttp(() => ({
-      data: {
-        code: 200,
-        playlists: [{ id: 7001, name: "华语精选", creator: { nickname: "云音乐" } }],
-      },
-    }));
     const playlists = await handleGenres({ genreId: "ncm:genre:华语", page: "1" });
     expect(playlists).toHaveLength(1);
     expect(playlists[0]).toMatchObject({ id: "7001", mediaType: "playlist", title: "华语精选" });
+
+    const rnbArtists = await handleGenres({ genreId: "ncm:genre:R&B/Soul", section: "artists" });
+    expect(rnbArtists[0]).toMatchObject({
+      id: "8325",
+      title: "林忆莲",
+      avatar: "https://p3.music.126.net/sandy.jpg?param=500y500",
+    });
+
+    const zhArtists = await handleGenres({ genreId: "ncm:genre:华语", section: "artists" });
+    expect(zhArtists[0]).toMatchObject({
+      id: "6452",
+      title: "周杰伦",
+      avatar: "https://p4.music.126.net/jay.jpg?param=500y500",
+    });
+
+    const healingArtists = await handleGenres({ genreId: "ncm:genre:治愈", section: "artists" });
+    expect(healingArtists[0]).toMatchObject({
+      id: "9001",
+      title: "治愈歌手",
+      avatar: "https://p3.music.126.net/heal.jpg?param=500y500",
+    });
   });
 
   test("handleRadios requires cookie for Personal FM and serves queue when authenticated", async () => {

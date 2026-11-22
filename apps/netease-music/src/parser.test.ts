@@ -46,6 +46,9 @@ describe("constants & parser", () => {
     expect(formatCoverUrl("https://p2.music.126.net/abc/123.jpg?param=200y200")).toBe(
       "https://p2.music.126.net/abc/123.jpg?param=200y200",
     );
+    expect(
+      formatCoverUrl("http://p1.music.126.net/abc/123.jpg?imageView=1&thumbnail=800y800&watermark&thumbnail=140y140&"),
+    ).toBe("https://p1.music.126.net/abc/123.jpg?param=500y500");
     expect(formatCoverUrl("https://example.com/cover.png")).toBe("https://example.com/cover.png");
   });
 

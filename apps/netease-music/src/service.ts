@@ -1,6 +1,7 @@
 import { parseCookieAuthInput } from "./auth";
 import {
   eapiRequest,
+  fetchArtistAvatarsBatch,
   fetchMvUrl,
   fetchSongDetails,
   fetchSongDynamicCover,
@@ -66,10 +67,13 @@ import {
   toRexSong,
 } from "./parser";
 import {
+  cacheArtistAvatars,
   cacheSongMetaList,
+  getCachedGenreCovers,
   getCachedSongMeta,
   getRuntimeConfig,
   type RuntimeConfig,
+  setCachedGenreCovers,
   syncRuntimeConfig,
   type TrackCacheHint,
 } from "./storage";
@@ -452,6 +456,181 @@ export async function handleNewReleases(
   return dedupeVideoItems(albums.map(toRexAlbum));
 }
 
+async function fetchCuratedGenreCovers(config: RuntimeConfig): Promise<Record<string, string>> {
+  const cached = getCachedGenreCovers();
+  const missingGenres = CURATED_GENRES.filter((genre) => !cached[genre.id]);
+  if (!missingGenres.length) {
+    return cached;
+  }
+
+  const covers: Record<string, string> = { ...cached };
+  const newlyFetched: Record<string, string> = {};
+
+  // 1. Fetch Style Hall artwork in a single request for all style-mapped genres
+  const styleMappedMissing = missingGenres.filter((genre) => Boolean(genre.styleTagId));
+  if (styleMappedMissing.length) {
+    try {
+      const styleRes = await eapiRequest<{ data?: unknown[] }>("/api/tag/list/get", {}, config, { timeout: 6 });
+      const styleMap = new Map<string, string>();
+      for (const raw of Array.isArray(styleRes.data) ? styleRes.data : []) {
+        const parsed = parseStyleTag(raw);
+        if (parsed?.tagId && parsed.imageUrl) {
+          styleMap.set(parsed.tagId, parsed.imageUrl);
+        }
+      }
+      for (const genre of styleMappedMissing) {
+        const pic = genre.styleTagId ? styleMap.get(genre.styleTagId) : undefined;
+        if (pic) {
+          covers[genre.id] = pic;
+          newlyFetched[genre.id] = pic;
+        }
+      }
+    } catch {
+      // Fall back to playlist cover lookup below
+    }
+  }
+
+  // 2. Fetch top hot playlist cover for remaining categories (language / mood / scene / theme)
+  const stillMissing = CURATED_GENRES.filter((genre) => !covers[genre.id]);
+  if (stillMissing.length) {
+    const results = await Promise.allSettled(
+      stillMissing.map((genre) =>
+        eapiRequest<{ playlists?: Array<{ coverImgUrl?: string; picUrl?: string }> }>(
+          "/api/playlist/list",
+          { cat: genre.id, order: "hot", limit: 1, offset: 0 },
+          config,
+          { timeout: 6 },
+        ),
+      ),
+    );
+    for (let i = 0; i < stillMissing.length; i++) {
+      const res = results[i];
+      if (res.status !== "fulfilled") {
+        continue;
+      }
+      const first = Array.isArray(res.value.playlists) ? res.value.playlists[0] : undefined;
+      const pic = formatCoverUrl(first?.coverImgUrl || first?.picUrl);
+      if (pic) {
+        const genreId = stillMissing[i].id;
+        covers[genreId] = pic;
+        newlyFetched[genreId] = pic;
+      }
+    }
+  }
+
+  if (Object.keys(newlyFetched).length) {
+    setCachedGenreCovers(newlyFetched);
+  }
+  return covers;
+}
+
+async function hydrateArtistsFromTracks(tracks: readonly NcmTrackRef[], config: RuntimeConfig): Promise<VideoItem[]> {
+  const uniqueArtists: NcmArtistRef[] = [];
+  const seen = new Set<string>();
+  const fallbackCoverByArtist = new Map<string, string>();
+
+  for (const track of tracks) {
+    const trackCover = track.imageUrl || track.album?.imageUrl;
+    for (const artist of track.artists) {
+      if (!artist.id || seen.has(artist.id)) {
+        continue;
+      }
+      seen.add(artist.id);
+      uniqueArtists.push(artist);
+      if (trackCover && !fallbackCoverByArtist.has(artist.id)) {
+        fallbackCoverByArtist.set(artist.id, trackCover);
+      }
+    }
+  }
+
+  const missingAvatarIds = uniqueArtists.filter((a) => !a.imageUrl).map((a) => a.id);
+  const fetchedAvatars = missingAvatarIds.length ? await fetchArtistAvatarsBatch(missingAvatarIds, config) : {};
+
+  const knownAvatars: Record<string, string> = {};
+  const enriched = uniqueArtists.map((artist) => {
+    const avatar = artist.imageUrl || fetchedAvatars[artist.id] || fallbackCoverByArtist.get(artist.id);
+    if (artist.imageUrl) {
+      knownAvatars[artist.id] = artist.imageUrl;
+    }
+    return toRexArtist({
+      ...artist,
+      ...(avatar ? { imageUrl: avatar } : {}),
+    });
+  });
+
+  if (Object.keys(knownAvatars).length) {
+    cacheArtistAvatars(knownAvatars);
+  }
+  return dedupeVideoItems(enriched);
+}
+
+async function fetchCuratedCategoryArtists(
+  cat: string,
+  offset: number,
+  config: RuntimeConfig,
+): Promise<VideoItem[] | null> {
+  const matched = CURATED_GENRES.find((genre) => genre.id === cat);
+  if (!matched) {
+    return null;
+  }
+
+  if (matched.styleTagId) {
+    try {
+      const response = await eapiRequest<{ data?: { artists?: unknown[] } }>(
+        "/api/style-tag/home/artist",
+        { tagId: matched.styleTagId, cursor: offset, size: DEFAULT_PAGE_SIZE, sort: 0 },
+        config,
+        { timeout: 8 },
+      );
+      const artists = (Array.isArray(response.data?.artists) ? response.data.artists : [])
+        .map(parseArtist)
+        .filter((item): item is NcmArtistRef => item !== null && Boolean(item.id));
+      if (artists.length) {
+        const avatars: Record<string, string> = {};
+        for (const artist of artists) {
+          if (artist.imageUrl) avatars[artist.id] = artist.imageUrl;
+        }
+        cacheArtistAvatars(avatars);
+        return dedupeVideoItems(artists.map((a) => toRexArtist(a)));
+      }
+    } catch {
+      // Fall through to playlist-derived artists
+    }
+  }
+
+  if (matched.artistArea) {
+    try {
+      const response = await eapiRequest<{ artists?: unknown[] }>(
+        "/api/v1/artist/list",
+        {
+          area: ARTIST_AREA_CODES[matched.artistArea],
+          type: -1,
+          limit: DEFAULT_PAGE_SIZE,
+          offset,
+          total: true,
+        },
+        config,
+        { timeout: 8 },
+      );
+      const artists = (Array.isArray(response.artists) ? response.artists : [])
+        .map(parseArtist)
+        .filter((item): item is NcmArtistRef => item !== null && Boolean(item.id));
+      if (artists.length) {
+        const avatars: Record<string, string> = {};
+        for (const artist of artists) {
+          if (artist.imageUrl) avatars[artist.id] = artist.imageUrl;
+        }
+        cacheArtistAvatars(avatars);
+        return dedupeVideoItems(artists.map((a) => toRexArtist(a)));
+      }
+    } catch {
+      // Fall through to playlist-derived artists
+    }
+  }
+
+  return null;
+}
+
 export async function handleGenres(
   params: CommonGlobalParams & PaginationParams & { genreId?: string; section?: string; source?: string },
 ): Promise<VideoItem[]> {
@@ -479,28 +658,38 @@ export async function handleGenres(
       return sliceByPage(items, params);
     }
 
+    const covers = await fetchCuratedGenreCovers(config);
+
     if (source === "highquality") {
-      const items: VideoItem[] = CURATED_GENRES.map((genre) => ({
-        id: `hq:${genre.id}`,
-        type: "url",
-        mediaType: "genre",
-        link: genreLink(`hq:${genre.id}`),
-        title: Widget.i18n(genre.title),
-        subtitle: `${Widget.i18n("精品歌单")} · ${Widget.i18n(genre.subtitle)}`,
-        genreTitle: Widget.i18n(genre.title),
-      }));
+      const items: VideoItem[] = CURATED_GENRES.map((genre) => {
+        const cover = covers[genre.id];
+        return {
+          id: `hq:${genre.id}`,
+          type: "url",
+          mediaType: "genre",
+          link: genreLink(`hq:${genre.id}`),
+          title: Widget.i18n(genre.title),
+          subtitle: `${Widget.i18n("精品歌单")} · ${Widget.i18n(genre.subtitle)}`,
+          genreTitle: Widget.i18n(genre.title),
+          ...(cover ? { posterPath: cover, coverUrl: cover } : {}),
+        };
+      });
       return sliceByPage(items, params);
     }
 
-    const items: VideoItem[] = CURATED_GENRES.map((genre) => ({
-      id: genre.id,
-      type: "url",
-      mediaType: "genre",
-      link: genreLink(genre.id),
-      title: Widget.i18n(genre.title),
-      subtitle: Widget.i18n(genre.subtitle),
-      genreTitle: Widget.i18n(genre.title),
-    }));
+    const items: VideoItem[] = CURATED_GENRES.map((genre) => {
+      const cover = covers[genre.id];
+      return {
+        id: genre.id,
+        type: "url",
+        mediaType: "genre",
+        link: genreLink(genre.id),
+        title: Widget.i18n(genre.title),
+        subtitle: Widget.i18n(genre.subtitle),
+        genreTitle: Widget.i18n(genre.title),
+        ...(cover ? { posterPath: cover, coverUrl: cover } : {}),
+      };
+    });
     return sliceByPage(items, params);
   }
 
@@ -571,6 +760,12 @@ export async function handleGenres(
   // High-quality playlist tag (`hq:<cat>`)
   if (rawGenreId.startsWith("hq:")) {
     const cat = rawGenreId.slice(3) || "全部";
+    if (section === "artists") {
+      const directArtists = await fetchCuratedCategoryArtists(cat, offset, config);
+      if (directArtists?.length) {
+        return directArtists;
+      }
+    }
     const response = await eapiRequest<{ playlists?: unknown[] }>(
       "/api/playlist/highquality/list",
       { cat, limit: 60, lasttime: 0, total: true },
@@ -586,12 +781,7 @@ export async function handleGenres(
       }
       const { tracks } = await fetchPlaylistTracks(seed.id, config, 60);
       if (section === "artists") {
-        const artists = dedupeVideoItems(
-          tracks
-            .flatMap((t) => t.artists)
-            .filter((a) => a.id)
-            .map((a) => toRexArtist(a)),
-        );
+        const artists = await hydrateArtistsFromTracks(tracks, config);
         return sliceByPage(artists, params);
       }
       const items = dedupeVideoItems(tracks.map(toRexSong));
@@ -599,6 +789,13 @@ export async function handleGenres(
       return sliceByPage(items, params);
     }
     return sliceByPage(dedupeVideoItems(playlists.map(toRexPlaylist)), params);
+  }
+
+  if (section === "artists") {
+    const directArtists = await fetchCuratedCategoryArtists(rawGenreId, offset, config);
+    if (directArtists?.length) {
+      return directArtists;
+    }
   }
 
   const response = await webRequest<{ playlists?: unknown[] }>(
@@ -617,12 +814,7 @@ export async function handleGenres(
     }
     const { tracks } = await fetchPlaylistTracks(seedPlaylist.id, config, 60);
     if (section === "artists") {
-      return dedupeVideoItems(
-        tracks
-          .flatMap((t) => t.artists)
-          .filter((a) => a.id)
-          .map((a) => toRexArtist(a)),
-      );
+      return hydrateArtistsFromTracks(tracks, config);
     }
     const items = dedupeVideoItems(tracks.map(toRexSong));
     cacheTracks(tracks, items);
@@ -850,12 +1042,7 @@ export async function handleRadios(
 
   const section = params.section || "songs";
   if (section === "artists") {
-    const artists = dedupeVideoItems(
-      tracks
-        .flatMap((t) => t.artists)
-        .filter((a) => a.id)
-        .map((a) => toRexArtist(a)),
-    );
+    const artists = await hydrateArtistsFromTracks(tracks, config);
     return sliceByPage(artists, params);
   }
   if (section === "albums") {

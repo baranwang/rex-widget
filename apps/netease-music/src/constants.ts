@@ -35,6 +35,8 @@ export const MAX_PODCAST_PROGRAMS = 100;
 export const SONG_DETAIL_BATCH_SIZE = 100;
 export const STREAM_CACHE_TTL_MS = 15 * 60 * 1000;
 export const ACCOUNT_CACHE_TTL_MS = 30 * 60 * 1000;
+export const GENRE_COVER_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+export const ARTIST_AVATAR_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 export type QualityPreference =
   | "standard"
@@ -134,26 +136,28 @@ export interface CuratedGenre {
   id: string;
   title: string;
   subtitle: string;
+  styleTagId?: string;
+  artistArea?: ArtistArea;
 }
 
 export const CURATED_GENRES: readonly CuratedGenre[] = [
-  { id: "华语", title: "华语", subtitle: "语种" },
-  { id: "欧美", title: "欧美", subtitle: "语种" },
-  { id: "日语", title: "日语", subtitle: "语种" },
-  { id: "韩语", title: "韩语", subtitle: "语种" },
-  { id: "粤语", title: "粤语", subtitle: "语种" },
-  { id: "流行", title: "流行", subtitle: "风格" },
-  { id: "摇滚", title: "摇滚", subtitle: "风格" },
-  { id: "民谣", title: "民谣", subtitle: "风格" },
-  { id: "电子", title: "电子", subtitle: "风格" },
-  { id: "说唱", title: "说唱", subtitle: "风格" },
-  { id: "轻音乐", title: "轻音乐", subtitle: "风格" },
-  { id: "爵士", title: "爵士", subtitle: "风格" },
-  { id: "古典", title: "古典", subtitle: "风格" },
-  { id: "古风", title: "古风", subtitle: "风格" },
-  { id: "R&B/Soul", title: "R&B/Soul", subtitle: "风格" },
-  { id: "ACG", title: "ACG", subtitle: "主题" },
-  { id: "影视原声", title: "影视原声", subtitle: "主题" },
+  { id: "华语", title: "华语", subtitle: "语种", artistArea: "ZH" },
+  { id: "欧美", title: "欧美", subtitle: "语种", artistArea: "EA" },
+  { id: "日语", title: "日语", subtitle: "语种", artistArea: "JP" },
+  { id: "韩语", title: "韩语", subtitle: "语种", artistArea: "KR" },
+  { id: "粤语", title: "粤语", subtitle: "语种", artistArea: "ZH" },
+  { id: "流行", title: "流行", subtitle: "风格", styleTagId: "1000" },
+  { id: "摇滚", title: "摇滚", subtitle: "风格", styleTagId: "1008" },
+  { id: "民谣", title: "民谣", subtitle: "风格", styleTagId: "1003" },
+  { id: "电子", title: "电子", subtitle: "风格", styleTagId: "1015" },
+  { id: "说唱", title: "说唱", subtitle: "风格", styleTagId: "1017" },
+  { id: "轻音乐", title: "轻音乐", subtitle: "风格", styleTagId: "1006" },
+  { id: "爵士", title: "爵士", subtitle: "风格", styleTagId: "1011" },
+  { id: "古典", title: "古典", subtitle: "风格", styleTagId: "1022" },
+  { id: "古风", title: "古风", subtitle: "风格", styleTagId: "10119" },
+  { id: "R&B/Soul", title: "R&B/Soul", subtitle: "风格", styleTagId: "1028" },
+  { id: "ACG", title: "ACG", subtitle: "主题", styleTagId: "1252" },
+  { id: "影视原声", title: "影视原声", subtitle: "主题", styleTagId: "1010" },
   { id: "游戏", title: "游戏", subtitle: "主题" },
   { id: "怀旧", title: "怀旧", subtitle: "情感" },
   { id: "治愈", title: "治愈", subtitle: "情感" },
@@ -298,6 +302,7 @@ export function formatCoverUrl(url?: string, size = 500): string | undefined {
   if (/[?&]param=/i.test(secure)) {
     return secure;
   }
-  const sep = secure.includes("?") ? "&" : "?";
-  return `${secure}${sep}param=${size}y${size}`;
+  const cleanBase = /[?&]imageView=/i.test(secure) ? secure.split("?")[0] : secure;
+  const sep = cleanBase.includes("?") ? "&" : "?";
+  return `${cleanBase}${sep}param=${size}y${size}`;
 }
