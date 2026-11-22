@@ -6,6 +6,7 @@ rs.stubGlobal("Widget", WidgetAdaptor);
 const widgetGlobals = [
   "WidgetMetadata",
   "loadHome",
+  "loadBanners",
   "loadCharts",
   "loadNewReleases",
   "loadGenres",

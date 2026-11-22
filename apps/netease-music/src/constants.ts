@@ -54,6 +54,7 @@ export type SearchKind = "all" | "songs" | "albums" | "artists" | "playlists" | 
 export type ReleaseArea = "ALL" | "ZH" | "EA" | "KR" | "JP";
 export type ArtistArea = "ALL" | "ZH" | "EA" | "JP" | "KR" | "OTHER";
 export type ArtistType = "ALL" | "MALE" | "FEMALE" | "BAND";
+export type BannerClientType = "ipad" | "pc" | "iphone" | "android";
 
 export const QUALITY_LEVELS: readonly QualityPreference[] = [
   "standard",
