@@ -1,5 +1,11 @@
 # @rexnow/netease-music
 
+## 0.3.0
+
+### Minor Changes
+
+- fd46b10: Add Featured Banners (`banners` / `loadBanners`) module supporting user-selectable NetEase client sources (`ipad`, `pc`, `iphone`, `android`), automatic filtering of non-playable web ads, full song/album/playlist/podcast metadata hydration, and wide `backdropPath` artwork.
+
 ## 0.2.1
 
 ### Patch Changes
