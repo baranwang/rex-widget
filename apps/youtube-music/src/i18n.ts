@@ -73,6 +73,12 @@ export const WIDGET_I18N: NonNullable<WidgetMetadata["i18n"]> = {
     无法识别的详情链接: "Unrecognized detail link",
     "YouTube 未返回有效的访问标识 (visitorData)": "YouTube returned no visitorData ID",
     "YouTube 未返回可直接播放的音频流": "YouTube returned no directly playable audio stream",
+    歌词: "Lyrics",
+    获取歌曲同步歌词与纯文本歌词: "Fetch synced and plain lyrics for songs",
+    "YouTube Music（同步歌词）": "YouTube Music (Synced Lyrics)",
+    "LRCLIB（同步歌词）": "LRCLIB (Synced Lyrics)",
+    "YouTube Music（纯文本歌词）": "YouTube Music (Plain Lyrics)",
+    "LRCLIB（纯文本歌词）": "LRCLIB (Plain Lyrics)",
   },
   "zh-Hant": {
     "YouTube Music 音乐插件，支持首页推荐、排行榜、新发行、流派、电台、歌手、搜索、专辑、歌单与直接音频播放":
@@ -148,5 +154,11 @@ export const WIDGET_I18N: NonNullable<WidgetMetadata["i18n"]> = {
     无法识别的详情链接: "無法識別的詳情連結",
     "YouTube 未返回有效的访问标识 (visitorData)": "YouTube 未回傳有效的存取識別 (visitorData)",
     "YouTube 未返回可直接播放的音频流": "YouTube 未回傳可直接播放的音訊串流",
+    歌词: "歌詞",
+    获取歌曲同步歌词与纯文本歌词: "取得歌曲同步歌詞與純文字歌詞",
+    "YouTube Music（同步歌词）": "YouTube Music（同步歌詞）",
+    "LRCLIB（同步歌词）": "LRCLIB（同步歌詞）",
+    "YouTube Music（纯文本歌词）": "YouTube Music（純文字歌詞）",
+    "LRCLIB（纯文本歌词）": "LRCLIB（純文字歌詞）",
   },
 };

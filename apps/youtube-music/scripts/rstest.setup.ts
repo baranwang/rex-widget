@@ -12,6 +12,7 @@ const widgetGlobals = [
   "loadRadios",
   "loadArtists",
   "loadLibrary",
+  "loadSubtitle",
   "search",
   "loadDetail",
 ];

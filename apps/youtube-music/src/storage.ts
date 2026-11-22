@@ -1,6 +1,7 @@
 import { getQueryParam } from "./auth";
 import {
   type AudioFormatPreference,
+  LYRICS_CACHE_TTL_MS,
   type PlayerTypePreference,
   STREAM_CACHE_TTL_MS,
   STREAM_EXPIRY_SAFETY_MARGIN_SECONDS,
@@ -13,6 +14,7 @@ const KEYS = {
   tokens: "ytm:tokens",
   searchSeen: "ytm:searchSeen",
   streams: "ytm:streams",
+  lyrics: "ytm:lyrics",
   songMeta: "ytm:songMeta",
   lastPlayed: "ytm:lastPlayed",
   radioSeeds: "ytm:radioSeeds",
@@ -21,6 +23,7 @@ const KEYS = {
 const MAX_TOKEN_ENTRIES = 60;
 const MAX_SEARCH_SEEN_ENTRIES = 20;
 const MAX_STREAM_ENTRIES = 40;
+const MAX_LYRICS_ENTRIES = 30;
 const MAX_SONG_META_ENTRIES = 120;
 const MAX_RADIO_SEEDS = 12;
 
@@ -42,6 +45,16 @@ export interface CachedAudioStream {
   author?: string;
   channelId?: string;
   coverUrl?: string;
+  cachedAt: number;
+}
+
+export interface CachedLyrics {
+  ytmSyncedLrc?: string;
+  ytmPlainText?: string;
+  lrclibId?: number;
+  lrclibSyncedLrc?: string;
+  lrclibPlainText?: string;
+  lang?: string;
   cachedAt: number;
 }
 
@@ -366,4 +379,40 @@ export function getCachedSongMeta(videoId: string): CachedSongMeta | null {
     return null;
   }
   return map[videoId] ?? null;
+}
+
+export function getCachedLyrics(cacheKey: string): CachedLyrics | null {
+  const map = readStorage<Record<string, CachedLyrics>>(KEYS.lyrics);
+  if (!map || typeof map !== "object") {
+    return null;
+  }
+  const entry = map[cacheKey];
+  if (!entry || typeof entry.cachedAt !== "number") {
+    return null;
+  }
+  if (Date.now() - entry.cachedAt > LYRICS_CACHE_TTL_MS) {
+    return null;
+  }
+  return entry;
+}
+
+export function setCachedLyrics(cacheKey: string, entry: Omit<CachedLyrics, "cachedAt">): void {
+  if (!entry.ytmSyncedLrc && !entry.ytmPlainText && !entry.lrclibSyncedLrc && !entry.lrclibPlainText) {
+    return;
+  }
+  const existing = readStorage<Record<string, CachedLyrics>>(KEYS.lyrics);
+  const map: Record<string, CachedLyrics> = existing && typeof existing === "object" ? { ...existing } : {};
+  delete map[cacheKey];
+  map[cacheKey] = {
+    ...entry,
+    cachedAt: Date.now(),
+  };
+
+  const keys = Object.keys(map);
+  if (keys.length > MAX_LYRICS_ENTRIES) {
+    for (const staleKey of keys.slice(0, keys.length - MAX_LYRICS_ENTRIES)) {
+      delete map[staleKey];
+    }
+  }
+  writeStorage(KEYS.lyrics, map);
 }

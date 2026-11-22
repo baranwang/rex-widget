@@ -157,6 +157,7 @@ describe("Rex YouTube Music widget", () => {
       "musicRadios",
       "musicArtists",
       "library",
+      "loadSubtitle",
     ]);
     expect(WidgetMetadata.search?.functionName).toBe("search");
     expect(typeof loadHome).toBe("function");
@@ -166,6 +167,7 @@ describe("Rex YouTube Music widget", () => {
     expect(typeof loadRadios).toBe("function");
     expect(typeof loadArtists).toBe("function");
     expect(typeof loadLibrary).toBe("function");
+    expect(typeof loadSubtitle).toBe("function");
     expect(typeof search).toBe("function");
     expect(typeof loadDetail).toBe("function");
   });
