@@ -8,26 +8,63 @@ export const WEB_UA =
 export const EAPI_CLIENT = {
   osver: "Microsoft-Windows-10-Professional-build-19045-64bit",
   os: "pc",
-  appver: "3.1.17.204416",
+  appver: "3.1.29.205117",
   versioncode: "140",
   resolution: "1920x1080",
   channel: "netease",
 } as const;
 
+export const EAPI_CLIENT_ANDROID = {
+  osver: "14",
+  os: "android",
+  appver: "9.5.61",
+  versioncode: "9005061",
+  resolution: "1080x2400",
+  channel: "xiaomi",
+} as const;
+
 export const EAPI_UA = `Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Safari/537.36 Chrome/91.0.4472.164 NeteaseMusicDesktop/${EAPI_CLIENT.appver}`;
+export const EAPI_ANDROID_UA =
+  "NeteaseMusic/9.5.61.260802021928(9005061);Dalvik/2.1.0 (Linux; U; Android 12; HBN-AL00 Build/cd737a2.0)";
 
 export const PRIVATE_RADAR_PLAYLIST_ID = "3136952023";
 
 export const DEFAULT_PAGE_SIZE = 30;
 export const MAX_PLAYLIST_TRACKS = 300;
+export const MAX_PODCAST_PROGRAMS = 100;
 export const SONG_DETAIL_BATCH_SIZE = 100;
 export const STREAM_CACHE_TTL_MS = 15 * 60 * 1000;
 export const ACCOUNT_CACHE_TTL_MS = 30 * 60 * 1000;
 
-export type QualityPreference = "standard" | "higher" | "exhigh" | "lossless" | "hires";
+export type QualityPreference =
+  | "standard"
+  | "higher"
+  | "exhigh"
+  | "lossless"
+  | "hires"
+  | "jyeffect"
+  | "sky"
+  | "dolby"
+  | "vivid"
+  | "jymaster";
 export type PlayerTypePreference = "auto" | "system" | "app";
-export type SearchKind = "all" | "songs" | "albums" | "artists" | "playlists";
+export type SearchKind = "all" | "songs" | "albums" | "artists" | "playlists" | "dj" | "lyrics" | "voices";
 export type ReleaseArea = "ALL" | "ZH" | "EA" | "KR" | "JP";
+export type ArtistArea = "ALL" | "ZH" | "EA" | "JP" | "KR" | "OTHER";
+export type ArtistType = "ALL" | "MALE" | "FEMALE" | "BAND";
+
+export const QUALITY_LEVELS: readonly QualityPreference[] = [
+  "standard",
+  "higher",
+  "exhigh",
+  "lossless",
+  "hires",
+  "jyeffect",
+  "sky",
+  "dolby",
+  "vivid",
+  "jymaster",
+] as const;
 
 export const QUALITY_BITRATES: Record<QualityPreference, number> = {
   standard: 128000,
@@ -35,7 +72,23 @@ export const QUALITY_BITRATES: Record<QualityPreference, number> = {
   exhigh: 320000,
   lossless: 999000,
   hires: 999000,
+  jyeffect: 999000,
+  sky: 999000,
+  dolby: 999000,
+  vivid: 999000,
+  jymaster: 999000,
 };
+
+export function isFlacQuality(quality: QualityPreference): boolean {
+  return (
+    quality === "lossless" ||
+    quality === "hires" ||
+    quality === "jyeffect" ||
+    quality === "sky" ||
+    quality === "dolby" ||
+    quality === "jymaster"
+  );
+}
 
 export const NEW_SONG_AREA_IDS: Record<ReleaseArea, number> = {
   ALL: 0,
@@ -45,11 +98,36 @@ export const NEW_SONG_AREA_IDS: Record<ReleaseArea, number> = {
   JP: 8,
 };
 
-export const SEARCH_TYPE_CODES: Record<Exclude<SearchKind, "all">, number> = {
+export const ARTIST_AREA_CODES: Record<ArtistArea, number> = {
+  ALL: -1,
+  ZH: 7,
+  EA: 96,
+  JP: 8,
+  KR: 16,
+  OTHER: 0,
+};
+
+export const ARTIST_TYPE_CODES: Record<ArtistType, number> = {
+  ALL: -1,
+  MALE: 1,
+  FEMALE: 2,
+  BAND: 3,
+};
+
+export const CHART_ARTIST_AREA_CODES: Record<Exclude<ReleaseArea, "ALL">, number> = {
+  ZH: 1,
+  EA: 2,
+  KR: 3,
+  JP: 4,
+};
+
+export const SEARCH_TYPE_CODES: Record<Exclude<SearchKind, "all" | "voices">, number> = {
   songs: 1,
   albums: 10,
   artists: 100,
   playlists: 1000,
+  lyrics: 1006,
+  dj: 1009,
 };
 
 export interface CuratedGenre {
@@ -89,6 +167,8 @@ export const LINK_PREFIX = {
   song: "ncm:song:",
   album: "ncm:album:",
   playlist: "ncm:playlist:",
+  dj: "ncm:dj:",
+  hot: "ncm:hot:",
   genre: "ncm:genre:",
   radio: "ncm:radio:",
 } as const;
@@ -103,6 +183,14 @@ export function albumLink(id: string): string {
 
 export function playlistLink(id: string): string {
   return `${LINK_PREFIX.playlist}${id}`;
+}
+
+export function djLink(id: string): string {
+  return `${LINK_PREFIX.dj}${id}`;
+}
+
+export function hotSearchLink(keyword: string): string {
+  return `${LINK_PREFIX.hot}${encodeURIComponent(keyword.trim())}`;
 }
 
 export function genreLink(cat: string): string {
@@ -120,7 +208,9 @@ export function isValidNumericId(value: string): boolean {
 export type ParsedDetailLink =
   | { kind: "song"; id: string }
   | { kind: "album"; id: string }
-  | { kind: "playlist"; id: string };
+  | { kind: "playlist"; id: string }
+  | { kind: "dj"; id: string }
+  | { kind: "hot"; keyword: string };
 
 export function parseDetailLink(link: string): ParsedDetailLink | null {
   const trimmed = (link || "").trim();
@@ -139,11 +229,30 @@ export function parseDetailLink(link: string): ParsedDetailLink | null {
     const id = trimmed.slice(LINK_PREFIX.playlist.length).trim();
     return isValidNumericId(id) ? { kind: "playlist", id } : null;
   }
+  if (trimmed.startsWith(LINK_PREFIX.dj)) {
+    const id = trimmed.slice(LINK_PREFIX.dj.length).trim();
+    return isValidNumericId(id) ? { kind: "dj", id } : null;
+  }
+  if (trimmed.startsWith(LINK_PREFIX.hot)) {
+    const encoded = trimmed.slice(LINK_PREFIX.hot.length).trim();
+    if (!encoded) {
+      return null;
+    }
+    try {
+      const keyword = decodeURIComponent(encoded).trim();
+      return keyword ? { kind: "hot", keyword } : null;
+    } catch {
+      return { kind: "hot", keyword: encoded };
+    }
+  }
 
   // Compatible with NetEase Cloud Music web/share links
-  const webMatch = /music\.163\.com\/(?:#\/)?(song|album|playlist)\?[^#]*\bid=(\d{1,20})\b/i.exec(trimmed);
+  const webMatch = /music\.163\.com\/(?:#\/)?(song|album|playlist|djradio|radio)\?[^#]*\bid=(\d{1,20})\b/i.exec(
+    trimmed,
+  );
   if (webMatch?.[1] && webMatch[2]) {
-    const kind = webMatch[1].toLowerCase() as "song" | "album" | "playlist";
+    const rawKind = webMatch[1].toLowerCase();
+    const kind = rawKind === "djradio" || rawKind === "radio" ? "dj" : (rawKind as "song" | "album" | "playlist");
     return { kind, id: webMatch[2] };
   }
   return null;
@@ -153,8 +262,9 @@ export function resolvePlayerType(preference: PlayerTypePreference, format: stri
   if (preference === "system" || preference === "app") {
     return preference;
   }
-  // Standalone FLAC over HTTP can be unreliable on native AVPlayer; prefer software decoder automatically.
-  if (format.toLowerCase() === "flac") {
+  // Standalone FLAC/ALAC over HTTP can be unreliable on native AVPlayer; prefer software decoder automatically.
+  const lower = format.toLowerCase();
+  if (lower === "flac" || lower === "alac") {
     return "app";
   }
   return undefined;

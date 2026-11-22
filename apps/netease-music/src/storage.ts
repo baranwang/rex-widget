@@ -2,6 +2,7 @@ import type { ManagedCookieName, SetCookieUpdate } from "./auth";
 import {
   ACCOUNT_CACHE_TTL_MS,
   type PlayerTypePreference,
+  QUALITY_LEVELS,
   type QualityPreference,
   STREAM_CACHE_TTL_MS,
 } from "./constants";
@@ -23,6 +24,7 @@ export interface RuntimeConfig {
   quality: QualityPreference;
   allowTrial: boolean;
   playerType: PlayerTypePreference;
+  reportHistory: boolean;
 }
 
 export interface CachedAccount {
@@ -50,6 +52,8 @@ export interface CachedSongMeta {
   duration?: number;
   durationText?: string;
   peoples?: PersonItem[];
+  mvId?: number;
+  albumId?: string;
 }
 
 const DEFAULT_CONFIG: RuntimeConfig = {
@@ -57,6 +61,7 @@ const DEFAULT_CONFIG: RuntimeConfig = {
   quality: "exhigh",
   allowTrial: false,
   playerType: "auto",
+  reportHistory: false,
 };
 
 function readStorage<T>(key: string): T | null {
@@ -95,8 +100,8 @@ function removeStorage(key: string): void {
 }
 
 export function normalizeQuality(value?: string): QualityPreference {
-  if (value === "standard" || value === "higher" || value === "exhigh" || value === "lossless" || value === "hires") {
-    return value;
+  if (value && (QUALITY_LEVELS as readonly string[]).includes(value)) {
+    return value as QualityPreference;
   }
   return "exhigh";
 }
@@ -118,6 +123,7 @@ export function getRuntimeConfig(): RuntimeConfig {
     quality: normalizeQuality(stored.quality),
     allowTrial: Boolean(stored.allowTrial),
     playerType: normalizePlayerType(stored.playerType),
+    reportHistory: Boolean(stored.reportHistory),
   };
 }
 
@@ -126,6 +132,7 @@ export function syncRuntimeConfig(params?: {
   quality?: string;
   allowTrial?: string;
   playerType?: string;
+  reportHistory?: string;
 }): RuntimeConfig {
   const prev = getRuntimeConfig();
   if (!params) {
@@ -136,6 +143,7 @@ export function syncRuntimeConfig(params?: {
     quality: params.quality !== undefined ? normalizeQuality(params.quality) : prev.quality,
     allowTrial: params.allowTrial !== undefined ? params.allowTrial === "true" : prev.allowTrial,
     playerType: params.playerType !== undefined ? normalizePlayerType(params.playerType) : prev.playerType,
+    reportHistory: params.reportHistory !== undefined ? params.reportHistory === "true" : prev.reportHistory,
   };
   if (next.cookie !== prev.cookie) {
     removeStorage(KEYS.account);
@@ -248,16 +256,34 @@ export function setCachedStream(
   writeStorage(KEYS.streams, map);
 }
 
-export function cacheSongMetaList(items: VideoItem[]): void {
+export interface TrackCacheHint {
+  id: string;
+  mvId?: number;
+  albumId?: string;
+}
+
+export function cacheSongMetaList(items: VideoItem[], hints?: readonly TrackCacheHint[]): void {
   const songs = items.filter((item) => item.mediaType === "song" && typeof item.id === "string" && item.id);
   if (!songs.length) {
     return;
+  }
+  const hintMap = new Map<string, TrackCacheHint>();
+  if (hints) {
+    for (const hint of hints) {
+      if (hint.id) {
+        hintMap.set(hint.id, hint);
+      }
+    }
   }
   const existing = readStorage<Record<string, CachedSongMeta>>(KEYS.songMeta);
   const map: Record<string, CachedSongMeta> = existing && typeof existing === "object" ? { ...existing } : {};
 
   for (const song of songs) {
     const id = String(song.id);
+    const prev = map[id];
+    const hint = hintMap.get(id);
+    const mvId = hint?.mvId ?? prev?.mvId;
+    const albumId = hint?.albumId || prev?.albumId;
     delete map[id];
     map[id] = {
       id,
@@ -268,6 +294,8 @@ export function cacheSongMetaList(items: VideoItem[]): void {
       ...(typeof song.duration === "number" ? { duration: song.duration } : {}),
       ...(song.durationText ? { durationText: song.durationText } : {}),
       ...(song.peoples?.length ? { peoples: song.peoples } : {}),
+      ...(mvId && mvId > 0 ? { mvId } : {}),
+      ...(albumId ? { albumId } : {}),
     };
   }
 

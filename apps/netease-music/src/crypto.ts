@@ -32,6 +32,35 @@ export function utf8Bytes(text: string): Uint8Array {
   return new Uint8Array(bytes);
 }
 
+const BASE64_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+/**
+ * Pure-JS Base64 encoder (Rex's JS runtime does not guarantee btoa or Buffer).
+ */
+export function base64EncodeBytes(bytes: Uint8Array): string {
+  let out = "";
+  for (let i = 0; i < bytes.length; i += 3) {
+    const b0 = bytes[i];
+    const hasB1 = i + 1 < bytes.length;
+    const hasB2 = i + 2 < bytes.length;
+    const b1 = hasB1 ? bytes[i + 1] : 0;
+    const b2 = hasB2 ? bytes[i + 2] : 0;
+    const triple = (b0 << 16) | (b1 << 8) | b2;
+    out += BASE64_ALPHABET[(triple >>> 18) & 0x3f];
+    out += BASE64_ALPHABET[(triple >>> 12) & 0x3f];
+    out += hasB1 ? BASE64_ALPHABET[(triple >>> 6) & 0x3f] : "=";
+    out += hasB2 ? BASE64_ALPHABET[triple & 0x3f] : "=";
+  }
+  return out;
+}
+
+/**
+ * Encodes a UTF-8 string into standard Base64.
+ */
+export function base64EncodeUtf8(text: string): string {
+  return base64EncodeBytes(utf8Bytes(text));
+}
+
 const MD5_SHIFTS = [
   7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22, 5, 9, 14, 20, 5, 9, 14, 20, 5, 9, 14, 20, 5, 9, 14, 20, 4,
   11, 16, 23, 4, 11, 16, 23, 4, 11, 16, 23, 4, 11, 16, 23, 6, 10, 15, 21, 6, 10, 15, 21, 6, 10, 15, 21, 6, 10, 15, 21,

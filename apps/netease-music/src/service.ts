@@ -1,13 +1,31 @@
 import { parseCookieAuthInput } from "./auth";
-import { eapiRequest, fetchSongDetails, resolveAccountUid, resolveAudioStream, webRequest } from "./client";
 import {
+  eapiRequest,
+  fetchMvUrl,
+  fetchSongDetails,
+  fetchSongDynamicCover,
+  fetchSongLyric,
+  resolveAccountUid,
+  resolveAudioStream,
+  scrobbleSong,
+  webRequest,
+} from "./client";
+import {
+  ARTIST_AREA_CODES,
+  ARTIST_TYPE_CODES,
+  type ArtistArea,
+  type ArtistType,
+  CHART_ARTIST_AREA_CODES,
   CURATED_GENRES,
   DEFAULT_PAGE_SIZE,
+  djLink,
   formatCoverUrl,
   genreLink,
+  hotSearchLink,
   isValidNumericId,
   LINK_PREFIX,
   MAX_PLAYLIST_TRACKS,
+  MAX_PODCAST_PROGRAMS,
   NEW_SONG_AREA_IDS,
   PRIVATE_RADAR_PLAYLIST_ID,
   parseDetailLink,
@@ -19,20 +37,30 @@ import {
   type SearchKind,
   songLink,
 } from "./constants";
+import { buildLyricSubtitleItems } from "./lyrics";
 import {
   dedupeVideoItems,
   formatDuration,
   type JsonRecord,
   type NcmAlbumRef,
   type NcmArtistRef,
+  type NcmDjProgramRef,
+  type NcmDjRadioRef,
   type NcmPlaylistRef,
+  type NcmStyleTagRef,
   type NcmTrackRef,
   parseAlbum,
   parseArtist,
+  parseDjProgram,
+  parseDjRadio,
   parsePlaylist,
+  parseStyleTag,
   parseTrack,
   toRexAlbum,
   toRexArtist,
+  toRexDjProgram,
+  toRexDjRadio,
+  toRexGenreItems,
   toRexPeoples,
   toRexPlaylist,
   toRexSong,
@@ -43,6 +71,7 @@ import {
   getRuntimeConfig,
   type RuntimeConfig,
   syncRuntimeConfig,
+  type TrackCacheHint,
 } from "./storage";
 
 interface CommonGlobalParams {
@@ -50,6 +79,7 @@ interface CommonGlobalParams {
   quality?: string;
   allowTrial?: string;
   playerType?: string;
+  reportHistory?: string;
 }
 
 interface PaginationParams {
@@ -84,6 +114,32 @@ function normalizeReleaseArea(value?: string): ReleaseArea {
     return value;
   }
   return "ALL";
+}
+
+function normalizeArtistArea(value?: string): ArtistArea {
+  if (value === "ZH" || value === "EA" || value === "JP" || value === "KR" || value === "OTHER") {
+    return value;
+  }
+  return "ALL";
+}
+
+function normalizeArtistType(value?: string): ArtistType {
+  if (value === "MALE" || value === "FEMALE" || value === "BAND") {
+    return value;
+  }
+  return "ALL";
+}
+
+function buildTrackHints(tracks: readonly NcmTrackRef[]): TrackCacheHint[] {
+  return tracks.map((track) => ({
+    id: track.id,
+    ...(track.mvId ? { mvId: track.mvId } : {}),
+    ...(track.album?.id ? { albumId: track.album.id } : {}),
+  }));
+}
+
+function cacheTracks(tracks: readonly NcmTrackRef[], items: VideoItem[]): void {
+  cacheSongMetaList(items, buildTrackHints(tracks));
 }
 
 async function fetchPlaylistTracks(
@@ -136,11 +192,46 @@ async function fetchPlaylistTracks(
   return { playlist, tracks: ordered };
 }
 
+async function fetchDjRadioWithPrograms(
+  radioId: string,
+  config: RuntimeConfig,
+  limit = MAX_PODCAST_PROGRAMS,
+): Promise<{ radio: NcmDjRadioRef; programs: NcmDjProgramRef[] }> {
+  const [detailRes, programsRes] = await Promise.allSettled([
+    eapiRequest<{ data?: JsonRecord }>("/api/djradio/v2/get", { id: radioId }, config),
+    eapiRequest<{ programs?: unknown[] }>("/api/dj/program/byradio", { radioId, limit, offset: 0, asc: false }, config),
+  ]);
+
+  const rawRadio = detailRes.status === "fulfilled" ? detailRes.value.data : undefined;
+  const radio = parseDjRadio(rawRadio) ?? {
+    id: radioId,
+    name: radioId,
+  };
+
+  const rawPrograms =
+    programsRes.status === "fulfilled" && Array.isArray(programsRes.value.programs) ? programsRes.value.programs : [];
+  const programs = rawPrograms
+    .map(parseDjProgram)
+    .filter((item): item is NcmDjProgramRef => item !== null)
+    .map((program) => ({
+      ...program,
+      host: program.host || radio.host,
+      radioName: program.radioName || radio.name,
+      imageUrl: program.imageUrl || radio.imageUrl,
+    }));
+
+  if (!programs.length && detailRes.status === "rejected" && programsRes.status === "rejected") {
+    throw detailRes.reason;
+  }
+
+  return { radio, programs };
+}
+
 export async function handleHome(
   params: CommonGlobalParams & PaginationParams & { filter?: string },
 ): Promise<VideoItem[]> {
   const config = syncRuntimeConfig(params);
-  const filter = (params.filter || "all") as "all" | "daily" | "songs" | "playlists";
+  const filter = (params.filter || "all") as "all" | "daily" | "history_daily" | "highquality" | "songs" | "playlists";
   const hasCookie = parseCookieAuthInput(config.cookie).hasMusicU;
 
   if (filter === "daily") {
@@ -153,8 +244,47 @@ export async function handleHome(
       .map(parseTrack)
       .filter((item): item is NcmTrackRef => item !== null);
     const items = dedupeVideoItems(tracks.map(toRexSong));
-    cacheSongMetaList(items);
+    cacheTracks(tracks, items);
     return sliceByPage(items, params);
+  }
+
+  if (filter === "history_daily") {
+    if (!hasCookie) {
+      throw new Error(Widget.i18n("请在模块设置中填写包含 MUSIC_U 的网易云音乐 Cookie 后查看个人内容"));
+    }
+    const datesRes = await eapiRequest<{ data?: { dates?: string[] } }>(
+      "/api/discovery/recommend/songs/history/recent",
+      {},
+      config,
+    );
+    const dates = Array.isArray(datesRes.data?.dates) ? datesRes.data.dates.filter(Boolean) : [];
+    const latestDate = dates[0];
+    if (!latestDate) {
+      return [];
+    }
+    const detailRes = await eapiRequest<{ data?: { songs?: unknown[] } }>(
+      "/api/discovery/recommend/songs/history/detail",
+      { date: latestDate },
+      config,
+    );
+    const tracks = (Array.isArray(detailRes.data?.songs) ? detailRes.data.songs : [])
+      .map(parseTrack)
+      .filter((item): item is NcmTrackRef => item !== null);
+    const items = dedupeVideoItems(tracks.map(toRexSong));
+    cacheTracks(tracks, items);
+    return sliceByPage(items, params);
+  }
+
+  if (filter === "highquality") {
+    const response = await eapiRequest<{ playlists?: unknown[] }>(
+      "/api/playlist/highquality/list",
+      { cat: "全部", limit: 60, lasttime: 0, total: true },
+      config,
+    );
+    const playlists = (Array.isArray(response.playlists) ? response.playlists : [])
+      .map(parsePlaylist)
+      .filter((item): item is NcmPlaylistRef => item !== null);
+    return sliceByPage(dedupeVideoItems(playlists.map(toRexPlaylist)), params);
   }
 
   const tasks: {
@@ -215,8 +345,12 @@ export async function handleHome(
   ]);
 
   const out: VideoItem[] = [];
+  const allTracks: NcmTrackRef[] = [];
   if (dailySongsRes.status === "fulfilled") {
-    for (const track of dailySongsRes.value) out.push(toRexSong(track));
+    for (const track of dailySongsRes.value) {
+      allTracks.push(track);
+      out.push(toRexSong(track));
+    }
   }
   if (dailyPlaylistsRes.status === "fulfilled") {
     for (const pl of dailyPlaylistsRes.value) out.push(toRexPlaylist(pl));
@@ -225,7 +359,10 @@ export async function handleHome(
     for (const pl of recommendedPlaylistsRes.value) out.push(toRexPlaylist(pl));
   }
   if (newSongsRes.status === "fulfilled") {
-    for (const track of newSongsRes.value) out.push(toRexSong(track));
+    for (const track of newSongsRes.value) {
+      allTracks.push(track);
+      out.push(toRexSong(track));
+    }
   }
 
   if (!out.length) {
@@ -238,15 +375,30 @@ export async function handleHome(
   }
 
   const deduped = dedupeVideoItems(out);
-  cacheSongMetaList(deduped);
+  cacheTracks(allTracks, deduped);
   return sliceByPage(deduped, params);
 }
 
 export async function handleCharts(
-  params: CommonGlobalParams & PaginationParams & { category?: string },
+  params: CommonGlobalParams & PaginationParams & { category?: string; artistArea?: string },
 ): Promise<VideoItem[]> {
   const config = syncRuntimeConfig(params);
-  const category = (params.category || "all") as "all" | "official" | "global";
+  const category = (params.category || "all") as "all" | "official" | "global" | "artists";
+
+  if (category === "artists") {
+    const areaKey =
+      params.artistArea === "EA" || params.artistArea === "KR" || params.artistArea === "JP" ? params.artistArea : "ZH";
+    const type = CHART_ARTIST_AREA_CODES[areaKey];
+    const response = await eapiRequest<{ list?: { artists?: unknown[] } }>(
+      "/api/toplist/artist",
+      { type, limit: 100, offset: 0, total: true },
+      config,
+    );
+    const artists = (Array.isArray(response.list?.artists) ? response.list.artists : [])
+      .map(parseArtist)
+      .filter((item): item is NcmArtistRef => item !== null && Boolean(item.id));
+    return sliceByPage(dedupeVideoItems(artists.map((a) => toRexArtist(a))), params);
+  }
 
   const response = await webRequest<{ list?: Array<JsonRecord & { ToplistType?: string }> }>(
     "/api/toplist/detail",
@@ -285,7 +437,7 @@ export async function handleNewReleases(
       .map(parseTrack)
       .filter((item): item is NcmTrackRef => item !== null);
     const items = dedupeVideoItems(tracks.map(toRexSong));
-    cacheSongMetaList(items);
+    cacheTracks(tracks, items);
     return items.slice(offset, offset + DEFAULT_PAGE_SIZE);
   }
 
@@ -301,12 +453,45 @@ export async function handleNewReleases(
 }
 
 export async function handleGenres(
-  params: CommonGlobalParams & PaginationParams & { genreId?: string; section?: string },
+  params: CommonGlobalParams & PaginationParams & { genreId?: string; section?: string; source?: string },
 ): Promise<VideoItem[]> {
   const config = syncRuntimeConfig(params);
   const rawGenreId = stripPrefix((params.genreId || "").trim(), LINK_PREFIX.genre);
 
   if (!rawGenreId) {
+    const source = (params.source || "all") as "all" | "styles" | "highquality";
+
+    if (source === "styles") {
+      const response = await eapiRequest<{ data?: unknown[] }>("/api/tag/list/get", {}, config);
+      const styleTags = (Array.isArray(response.data) ? response.data : [])
+        .map(parseStyleTag)
+        .filter((item): item is NcmStyleTagRef => item !== null);
+      const items: VideoItem[] = styleTags.map((tag) => ({
+        id: `style:${tag.tagId}`,
+        type: "url",
+        mediaType: "genre",
+        link: genreLink(`style:${tag.tagId}`),
+        title: tag.tagName,
+        subtitle: tag.enName || Widget.i18n("曲风馆"),
+        genreTitle: tag.tagName,
+        ...(tag.imageUrl ? { posterPath: tag.imageUrl, coverUrl: tag.imageUrl } : {}),
+      }));
+      return sliceByPage(items, params);
+    }
+
+    if (source === "highquality") {
+      const items: VideoItem[] = CURATED_GENRES.map((genre) => ({
+        id: `hq:${genre.id}`,
+        type: "url",
+        mediaType: "genre",
+        link: genreLink(`hq:${genre.id}`),
+        title: Widget.i18n(genre.title),
+        subtitle: `${Widget.i18n("精品歌单")} · ${Widget.i18n(genre.subtitle)}`,
+        genreTitle: Widget.i18n(genre.title),
+      }));
+      return sliceByPage(items, params);
+    }
+
     const items: VideoItem[] = CURATED_GENRES.map((genre) => ({
       id: genre.id,
       type: "url",
@@ -322,6 +507,100 @@ export async function handleGenres(
   const offset = resolveOffset(params);
   const section = params.section || "albums";
 
+  // Style Hall (`style:<tagId>`) supports native songs, albums/playlists, and artists endpoints
+  if (rawGenreId.startsWith("style:") && isValidNumericId(rawGenreId.slice(6))) {
+    const tagId = rawGenreId.slice(6);
+    if (section === "songs") {
+      const response = await eapiRequest<{ data?: { songs?: unknown[] } }>(
+        "/api/style-tag/home/song",
+        { tagId, cursor: offset, size: DEFAULT_PAGE_SIZE, sort: 0 },
+        config,
+      );
+      const tracks = (Array.isArray(response.data?.songs) ? response.data.songs : [])
+        .map(parseTrack)
+        .filter((item): item is NcmTrackRef => item !== null);
+      const items = dedupeVideoItems(tracks.map(toRexSong));
+      cacheTracks(tracks, items);
+      return items;
+    }
+
+    if (section === "artists") {
+      const response = await eapiRequest<{ data?: { artists?: unknown[] } }>(
+        "/api/style-tag/home/artist",
+        { tagId, cursor: offset, size: DEFAULT_PAGE_SIZE, sort: 0 },
+        config,
+      );
+      const artists = (Array.isArray(response.data?.artists) ? response.data.artists : [])
+        .map(parseArtist)
+        .filter((item): item is NcmArtistRef => item !== null && Boolean(item.id));
+      return dedupeVideoItems(artists.map((a) => toRexArtist(a)));
+    }
+
+    const [albumsRes, playlistsRes] = await Promise.allSettled([
+      eapiRequest<{ data?: { albums?: unknown[] } }>(
+        "/api/style-tag/home/album",
+        { tagId, cursor: offset, size: Math.ceil(DEFAULT_PAGE_SIZE / 2), sort: 0 },
+        config,
+      ),
+      eapiRequest<{ data?: { playlist?: unknown[] } }>(
+        "/api/style-tag/home/playlist",
+        { tagId, cursor: offset, size: Math.ceil(DEFAULT_PAGE_SIZE / 2), sort: 0 },
+        config,
+      ),
+    ]);
+
+    const out: VideoItem[] = [];
+    if (albumsRes.status === "fulfilled") {
+      const albums = (Array.isArray(albumsRes.value.data?.albums) ? albumsRes.value.data.albums : [])
+        .map(parseAlbum)
+        .filter((item): item is NcmAlbumRef => item !== null);
+      for (const album of albums) out.push(toRexAlbum(album));
+    }
+    if (playlistsRes.status === "fulfilled") {
+      const playlists = (Array.isArray(playlistsRes.value.data?.playlist) ? playlistsRes.value.data.playlist : [])
+        .map(parsePlaylist)
+        .filter((item): item is NcmPlaylistRef => item !== null);
+      for (const pl of playlists) out.push(toRexPlaylist(pl));
+    }
+    if (!out.length && albumsRes.status === "rejected") {
+      throw albumsRes.reason;
+    }
+    return dedupeVideoItems(out);
+  }
+
+  // High-quality playlist tag (`hq:<cat>`)
+  if (rawGenreId.startsWith("hq:")) {
+    const cat = rawGenreId.slice(3) || "全部";
+    const response = await eapiRequest<{ playlists?: unknown[] }>(
+      "/api/playlist/highquality/list",
+      { cat, limit: 60, lasttime: 0, total: true },
+      config,
+    );
+    const playlists = (Array.isArray(response.playlists) ? response.playlists : [])
+      .map(parsePlaylist)
+      .filter((item): item is NcmPlaylistRef => item !== null);
+    if (section === "songs" || section === "artists") {
+      const seed = playlists[0];
+      if (!seed) {
+        return [];
+      }
+      const { tracks } = await fetchPlaylistTracks(seed.id, config, 60);
+      if (section === "artists") {
+        const artists = dedupeVideoItems(
+          tracks
+            .flatMap((t) => t.artists)
+            .filter((a) => a.id)
+            .map((a) => toRexArtist(a)),
+        );
+        return sliceByPage(artists, params);
+      }
+      const items = dedupeVideoItems(tracks.map(toRexSong));
+      cacheTracks(tracks, items);
+      return sliceByPage(items, params);
+    }
+    return sliceByPage(dedupeVideoItems(playlists.map(toRexPlaylist)), params);
+  }
+
   const response = await webRequest<{ playlists?: unknown[] }>(
     "/api/playlist/list",
     { cat: rawGenreId, order: "hot", limit: DEFAULT_PAGE_SIZE, offset, total: true },
@@ -331,32 +610,59 @@ export async function handleGenres(
     .map(parsePlaylist)
     .filter((item): item is NcmPlaylistRef => item !== null);
 
-  if (section === "songs") {
+  if (section === "songs" || section === "artists") {
     const seedPlaylist = playlists[0];
     if (!seedPlaylist) {
       return [];
     }
     const { tracks } = await fetchPlaylistTracks(seedPlaylist.id, config, 60);
+    if (section === "artists") {
+      return dedupeVideoItems(
+        tracks
+          .flatMap((t) => t.artists)
+          .filter((a) => a.id)
+          .map((a) => toRexArtist(a)),
+      );
+    }
     const items = dedupeVideoItems(tracks.map(toRexSong));
-    cacheSongMetaList(items);
+    cacheTracks(tracks, items);
     return items;
   }
 
   return dedupeVideoItems(playlists.map(toRexPlaylist));
 }
 
-async function fetchFmBatch(mode: "DEFAULT" | "FAMILIAR" | "EXPLORE", config: RuntimeConfig): Promise<NcmTrackRef[]> {
+async function fetchFmBatch(mode: string, subMode: string, config: RuntimeConfig): Promise<NcmTrackRef[]> {
   if (!parseCookieAuthInput(config.cookie).hasMusicU) {
     throw new Error(Widget.i18n("私人漫游需要配置网易云音乐 Cookie（含 MUSIC_U）"));
   }
-  const response = await eapiRequest<{ data?: unknown[] }>(
-    "/api/v1/radio/get",
-    { mode, subMode: "", limit: 10 },
-    config,
-  );
+  const response = await eapiRequest<{ data?: unknown[] }>("/api/v1/radio/get", { mode, subMode, limit: 10 }, config);
   return (Array.isArray(response.data) ? response.data : [])
     .map(parseTrack)
     .filter((item): item is NcmTrackRef => item !== null);
+}
+
+async function fetchSportRadioTracks(bpm: number, config: RuntimeConfig): Promise<NcmTrackRef[]> {
+  const batches = await Promise.allSettled([
+    eapiRequest<{ data?: unknown[] }>("/api/radio/sport/get", { bpm }, config),
+    eapiRequest<{ data?: unknown[] }>("/api/radio/sport/get", { bpm }, config),
+    eapiRequest<{ data?: unknown[] }>("/api/radio/sport/get", { bpm }, config),
+  ]);
+  const tracks: NcmTrackRef[] = [];
+  for (const res of batches) {
+    if (res.status === "fulfilled" && Array.isArray(res.value.data)) {
+      for (const raw of res.value.data) {
+        const parsed = parseTrack(raw);
+        if (parsed) {
+          tracks.push(parsed);
+        }
+      }
+    }
+  }
+  if (!tracks.length && batches[0]?.status === "rejected") {
+    throw batches[0].reason;
+  }
+  return tracks;
 }
 
 async function fetchHeartModeTracks(config: RuntimeConfig): Promise<NcmTrackRef[]> {
@@ -397,6 +703,15 @@ async function fetchHeartModeTracks(config: RuntimeConfig): Promise<NcmTrackRef[
   return songs.length ? songs : likedTracks;
 }
 
+const FM_MODE_MAP: Record<string, { mode: string; subMode: string }> = {
+  "fm:DEFAULT": { mode: "DEFAULT", subMode: "" },
+  "fm:FAMILIAR": { mode: "FAMILIAR", subMode: "" },
+  "fm:EXPLORE": { mode: "EXPLORE", subMode: "" },
+  "fm:SCENE_EXERCISE": { mode: "SCENE_RCMD", subMode: "EXERCISE" },
+  "fm:SCENE_FOCUS": { mode: "SCENE_RCMD", subMode: "FOCUS" },
+  "fm:SCENE_NIGHT": { mode: "SCENE_RCMD", subMode: "NIGHT_EMO" },
+};
+
 export async function handleRadios(
   params: CommonGlobalParams & PaginationParams & { radioId?: string; section?: string },
 ): Promise<VideoItem[]> {
@@ -430,12 +745,44 @@ export async function handleRadios(
         subtitle: Widget.i18n("发现新鲜小众好音乐（需配置 Cookie）"),
       },
       {
+        id: "fm:SCENE_EXERCISE",
+        type: "url",
+        mediaType: "radio",
+        link: radioLink("fm:SCENE_EXERCISE"),
+        title: Widget.i18n("场景漫游 · 运动"),
+        subtitle: Widget.i18n("高燃节奏伴你运动（需配置 Cookie）"),
+      },
+      {
+        id: "fm:SCENE_FOCUS",
+        type: "url",
+        mediaType: "radio",
+        link: radioLink("fm:SCENE_FOCUS"),
+        title: Widget.i18n("场景漫游 · 专注"),
+        subtitle: Widget.i18n("沉浸工作与学习氛围（需配置 Cookie）"),
+      },
+      {
+        id: "fm:SCENE_NIGHT",
+        type: "url",
+        mediaType: "radio",
+        link: radioLink("fm:SCENE_NIGHT"),
+        title: Widget.i18n("场景漫游 · 深夜情绪"),
+        subtitle: Widget.i18n("治愈深夜情绪的私藏歌单（需配置 Cookie）"),
+      },
+      {
         id: "heart",
         type: "url",
         mediaType: "radio",
         link: radioLink("heart"),
         title: Widget.i18n("心动模式"),
         subtitle: Widget.i18n("以我喜欢的音乐为种子智能推荐（需配置 Cookie）"),
+      },
+      {
+        id: "sport",
+        type: "url",
+        mediaType: "radio",
+        link: radioLink("sport"),
+        title: Widget.i18n("跑步漫游"),
+        subtitle: Widget.i18n("按 160 BPM 步频推荐的动感节奏"),
       },
       {
         id: "radar",
@@ -472,10 +819,13 @@ export async function handleRadios(
   }
 
   let tracks: NcmTrackRef[] = [];
-  if (rawRadioId === "fm:DEFAULT" || rawRadioId === "fm:FAMILIAR" || rawRadioId === "fm:EXPLORE") {
-    const mode = rawRadioId.slice(3) as "DEFAULT" | "FAMILIAR" | "EXPLORE";
+  const fmConfig = FM_MODE_MAP[rawRadioId];
+  if (fmConfig) {
     // Fetch two batches for a richer Rex playback queue
-    const [first, second] = await Promise.allSettled([fetchFmBatch(mode, config), fetchFmBatch(mode, config)]);
+    const [first, second] = await Promise.allSettled([
+      fetchFmBatch(fmConfig.mode, fmConfig.subMode, config),
+      fetchFmBatch(fmConfig.mode, fmConfig.subMode, config),
+    ]);
     if (first.status === "fulfilled") tracks.push(...first.value);
     if (second.status === "fulfilled") tracks.push(...second.value);
     if (!tracks.length && first.status === "rejected") {
@@ -483,10 +833,17 @@ export async function handleRadios(
     }
   } else if (rawRadioId === "heart") {
     tracks = await fetchHeartModeTracks(config);
+  } else if (rawRadioId === "sport") {
+    tracks = await fetchSportRadioTracks(160, config);
   } else if (rawRadioId === "radar") {
     tracks = (await fetchPlaylistTracks(PRIVATE_RADAR_PLAYLIST_ID, config, 60)).tracks;
   } else if (rawRadioId.startsWith("pl:") && isValidNumericId(rawRadioId.slice(3))) {
     tracks = (await fetchPlaylistTracks(rawRadioId.slice(3), config, 60)).tracks;
+  } else if (rawRadioId.startsWith("dj:") && isValidNumericId(rawRadioId.slice(3))) {
+    const { programs } = await fetchDjRadioWithPrograms(rawRadioId.slice(3), config, 60);
+    const items = dedupeVideoItems(programs.map(toRexDjProgram));
+    cacheSongMetaList(items);
+    return sliceByPage(items, params);
   } else if (isValidNumericId(rawRadioId)) {
     tracks = (await fetchPlaylistTracks(rawRadioId, config, 60)).tracks;
   }
@@ -520,18 +877,93 @@ export async function handleRadios(
   }
 
   const items = dedupeVideoItems(tracks.map(toRexSong));
-  cacheSongMetaList(items);
+  cacheTracks(tracks, items);
   return sliceByPage(items, params);
 }
 
+export async function handlePodcasts(
+  params: CommonGlobalParams & PaginationParams & { category?: string },
+): Promise<VideoItem[]> {
+  const config = syncRuntimeConfig(params);
+  const category = (params.category || "recommend") as "recommend" | "hot" | "toplist_hot" | "toplist_new" | "programs";
+  const offset = resolveOffset(params);
+
+  if (category === "programs") {
+    const response = await eapiRequest<{ toplist?: Array<{ program?: unknown }> }>(
+      "/api/program/toplist/v1",
+      { limit: DEFAULT_PAGE_SIZE, offset },
+      config,
+    );
+    const programs = (Array.isArray(response.toplist) ? response.toplist : [])
+      .map((entry) => parseDjProgram(entry?.program))
+      .filter((item): item is NcmDjProgramRef => item !== null);
+    const items = dedupeVideoItems(programs.map(toRexDjProgram));
+    cacheSongMetaList(items);
+    return items;
+  }
+
+  if (category === "hot") {
+    const response = await eapiRequest<{ djRadios?: unknown[] }>(
+      "/api/djradio/hot/v1",
+      { limit: DEFAULT_PAGE_SIZE, offset },
+      config,
+    );
+    const radios = (Array.isArray(response.djRadios) ? response.djRadios : [])
+      .map(parseDjRadio)
+      .filter((item): item is NcmDjRadioRef => item !== null);
+    return dedupeVideoItems(radios.map(toRexDjRadio));
+  }
+
+  if (category === "toplist_hot" || category === "toplist_new") {
+    const type = category === "toplist_hot" ? 1 : 0;
+    const response = await eapiRequest<{ toplist?: unknown[] }>(
+      "/api/djradio/toplist",
+      { type, limit: DEFAULT_PAGE_SIZE, offset },
+      config,
+    );
+    const radios = (Array.isArray(response.toplist) ? response.toplist : [])
+      .map(parseDjRadio)
+      .filter((item): item is NcmDjRadioRef => item !== null);
+    return dedupeVideoItems(radios.map(toRexDjRadio));
+  }
+
+  const response = await eapiRequest<{ djRadios?: unknown[] }>("/api/djradio/recommend/v1", {}, config);
+  const radios = (Array.isArray(response.djRadios) ? response.djRadios : [])
+    .map(parseDjRadio)
+    .filter((item): item is NcmDjRadioRef => item !== null);
+  return sliceByPage(dedupeVideoItems(radios.map(toRexDjRadio)), params);
+}
+
 export async function handleArtists(
-  params: CommonGlobalParams & PaginationParams & { peopleId?: string; section?: string },
+  params: CommonGlobalParams &
+    PaginationParams & { peopleId?: string; section?: string; area?: string; artistType?: string },
 ): Promise<VideoItem[]> {
   const config = syncRuntimeConfig(params);
   const peopleId = (params.peopleId || "").trim();
   const offset = resolveOffset(params);
 
   if (!peopleId) {
+    const area = normalizeArtistArea(params.area);
+    const artistType = normalizeArtistType(params.artistType);
+
+    if (area !== "ALL" || artistType !== "ALL") {
+      const response = await eapiRequest<{ artists?: unknown[] }>(
+        "/api/v1/artist/list",
+        {
+          area: ARTIST_AREA_CODES[area],
+          type: ARTIST_TYPE_CODES[artistType],
+          limit: DEFAULT_PAGE_SIZE,
+          offset,
+          total: true,
+        },
+        config,
+      );
+      const artists = (Array.isArray(response.artists) ? response.artists : [])
+        .map(parseArtist)
+        .filter((item): item is NcmArtistRef => item !== null && Boolean(item.id));
+      return dedupeVideoItems(artists.map((a) => toRexArtist(a)));
+    }
+
     const response = await webRequest<{ artists?: unknown[] }>(
       "/api/artist/top",
       { limit: DEFAULT_PAGE_SIZE, offset },
@@ -548,13 +980,27 @@ export async function handleArtists(
   }
 
   if (params.section === "profile") {
-    const response = await webRequest<{ artist?: JsonRecord }>(`/api/v1/artist/${peopleId}`, {}, config);
-    const artist = parseArtist(response.artist);
+    const [baseRes, descRes] = await Promise.allSettled([
+      webRequest<{ artist?: JsonRecord }>(`/api/v1/artist/${peopleId}`, {}, config),
+      eapiRequest<{ briefDesc?: string; introduction?: Array<{ ti?: string; txt?: string }> }>(
+        "/api/artist/introduction",
+        { id: peopleId },
+        config,
+        { timeout: 6 },
+      ),
+    ]);
+    if (baseRes.status === "rejected") {
+      throw baseRes.reason;
+    }
+    const artist = parseArtist(baseRes.value.artist);
     if (!artist) {
       return [];
     }
-    const rawArtist = response.artist || {};
-    const briefDesc = typeof rawArtist.briefDesc === "string" ? rawArtist.briefDesc.trim() : "";
+    const rawArtist = baseRes.value.artist || {};
+    const briefDesc =
+      (descRes.status === "fulfilled" && typeof descRes.value.briefDesc === "string"
+        ? descRes.value.briefDesc.trim()
+        : "") || (typeof rawArtist.briefDesc === "string" ? rawArtist.briefDesc.trim() : "");
     const musicSize = Number(rawArtist.musicSize) || 0;
     const albumSize = Number(rawArtist.albumSize) || 0;
     const stats = [
@@ -563,7 +1009,19 @@ export async function handleArtists(
     ]
       .filter(Boolean)
       .join(" · ");
-    const description = [stats, briefDesc].filter(Boolean).join("\n") || undefined;
+
+    const introParts: string[] = [];
+    if (descRes.status === "fulfilled" && Array.isArray(descRes.value.introduction)) {
+      for (const section of descRes.value.introduction.slice(0, 3)) {
+        const ti = typeof section?.ti === "string" ? section.ti.trim() : "";
+        const txt = typeof section?.txt === "string" ? section.txt.trim() : "";
+        if (ti && txt) {
+          introParts.push(`${ti}\n${txt}`);
+        }
+      }
+    }
+
+    const description = [stats, briefDesc, ...introParts].filter(Boolean).join("\n\n") || undefined;
     return [toRexArtist(artist, description)];
   }
 
@@ -604,7 +1062,7 @@ export async function handleArtists(
       .filter((item): item is NcmTrackRef => item !== null);
     if (tracks.length) {
       const items = dedupeVideoItems(tracks.map(toRexSong));
-      cacheSongMetaList(items);
+      cacheTracks(tracks, items);
       return items.slice(0, DEFAULT_PAGE_SIZE);
     }
   }
@@ -619,7 +1077,7 @@ export async function handleArtists(
     .map(parseTrack)
     .filter((item): item is NcmTrackRef => item !== null);
   const items = dedupeVideoItems(tracks.map(toRexSong));
-  cacheSongMetaList(items);
+  cacheTracks(tracks, items);
   return items;
 }
 
@@ -627,10 +1085,95 @@ export async function handleLibrary(
   params: CommonGlobalParams & PaginationParams & { tab?: string },
 ): Promise<VideoItem[]> {
   const config = syncRuntimeConfig(params);
-  const tab = (params.tab || "liked") as "liked" | "playlists" | "cloud" | "recent_week" | "recent_all";
+  const tab = (params.tab || "liked") as
+    | "liked"
+    | "playlists"
+    | "cloud"
+    | "recent_songs"
+    | "recent_albums"
+    | "recent_playlists"
+    | "sub_albums"
+    | "sub_artists"
+    | "sub_podcasts"
+    | "recent_week"
+    | "recent_all";
   const offset = resolveOffset(params);
 
   const { uid } = await resolveAccountUid(config);
+
+  if (tab === "recent_songs") {
+    const response = await eapiRequest<{ data?: { list?: Array<{ data?: unknown }> } }>(
+      "/api/play-record/song/list",
+      { limit: 100 },
+      config,
+    );
+    const tracks = (Array.isArray(response.data?.list) ? response.data.list : [])
+      .map((entry) => parseTrack(entry?.data))
+      .filter((item): item is NcmTrackRef => item !== null);
+    const items = dedupeVideoItems(tracks.map(toRexSong));
+    cacheTracks(tracks, items);
+    return sliceByPage(items, params);
+  }
+
+  if (tab === "recent_albums") {
+    const response = await eapiRequest<{ data?: { list?: Array<{ data?: unknown }> } }>(
+      "/api/play-record/album/list",
+      { limit: 100 },
+      config,
+    );
+    const albums = (Array.isArray(response.data?.list) ? response.data.list : [])
+      .map((entry) => parseAlbum(entry?.data))
+      .filter((item): item is NcmAlbumRef => item !== null);
+    return sliceByPage(dedupeVideoItems(albums.map(toRexAlbum)), params);
+  }
+
+  if (tab === "recent_playlists") {
+    const response = await eapiRequest<{ data?: { list?: Array<{ data?: unknown }> } }>(
+      "/api/play-record/playlist/list",
+      { limit: 100 },
+      config,
+    );
+    const playlists = (Array.isArray(response.data?.list) ? response.data.list : [])
+      .map((entry) => parsePlaylist(entry?.data))
+      .filter((item): item is NcmPlaylistRef => item !== null);
+    return sliceByPage(dedupeVideoItems(playlists.map(toRexPlaylist)), params);
+  }
+
+  if (tab === "sub_albums") {
+    const response = await eapiRequest<{ data?: unknown[] }>(
+      "/api/album/sublist",
+      { limit: DEFAULT_PAGE_SIZE, offset, total: true },
+      config,
+    );
+    const albums = (Array.isArray(response.data) ? response.data : [])
+      .map(parseAlbum)
+      .filter((item): item is NcmAlbumRef => item !== null);
+    return dedupeVideoItems(albums.map(toRexAlbum));
+  }
+
+  if (tab === "sub_artists") {
+    const response = await eapiRequest<{ data?: unknown[] }>(
+      "/api/artist/sublist",
+      { limit: DEFAULT_PAGE_SIZE, offset, total: true },
+      config,
+    );
+    const artists = (Array.isArray(response.data) ? response.data : [])
+      .map(parseArtist)
+      .filter((item): item is NcmArtistRef => item !== null && Boolean(item.id));
+    return dedupeVideoItems(artists.map((a) => toRexArtist(a)));
+  }
+
+  if (tab === "sub_podcasts") {
+    const response = await eapiRequest<{ djRadios?: unknown[] }>(
+      "/api/djradio/get/subed",
+      { limit: DEFAULT_PAGE_SIZE, offset, total: true },
+      config,
+    );
+    const radios = (Array.isArray(response.djRadios) ? response.djRadios : [])
+      .map(parseDjRadio)
+      .filter((item): item is NcmDjRadioRef => item !== null);
+    return dedupeVideoItems(radios.map(toRexDjRadio));
+  }
 
   if (tab === "cloud") {
     const response = await eapiRequest<{
@@ -662,7 +1205,7 @@ export async function handleLibrary(
       }
     }
     const items = dedupeVideoItems(tracks.map(toRexSong));
-    cacheSongMetaList(items);
+    cacheTracks(tracks, items);
     return items;
   }
 
@@ -677,7 +1220,7 @@ export async function handleLibrary(
       .map((entry) => parseTrack(entry?.song))
       .filter((item): item is NcmTrackRef => item !== null);
     const items = dedupeVideoItems(tracks.map(toRexSong));
-    cacheSongMetaList(items);
+    cacheTracks(tracks, items);
     return sliceByPage(items, params);
   }
 
@@ -701,8 +1244,50 @@ export async function handleLibrary(
   }
   const { tracks } = await fetchPlaylistTracks(likedId, config, MAX_PLAYLIST_TRACKS);
   const items = dedupeVideoItems(tracks.map(toRexSong));
-  cacheSongMetaList(items);
+  cacheTracks(tracks, items);
   return sliceByPage(items, params);
+}
+
+function stripHtmlTags(text: string): string {
+  return text.replace(/<[^>]+>/g, "").trim();
+}
+
+async function fetchHotSearchItems(params: PaginationParams, config: RuntimeConfig): Promise<VideoItem[]> {
+  try {
+    const response = await eapiRequest<{
+      data?: Array<{
+        searchWord?: string;
+        content?: string;
+        score?: number;
+        iconUrl?: string;
+      }>;
+    }>("/api/hotsearchlist/get", {}, config, { timeout: 10 });
+    const rows = Array.isArray(response.data) ? response.data : [];
+    const items: VideoItem[] = [];
+    rows.forEach((entry, index) => {
+      const word = typeof entry?.searchWord === "string" ? entry.searchWord.trim() : "";
+      if (!word) {
+        return;
+      }
+      const rank = index + 1;
+      const content = typeof entry.content === "string" ? entry.content.trim() : "";
+      const score = Number(entry.score) || 0;
+      const subtitle = content || (score > 0 ? `${Widget.i18n("热搜")} · ${score}` : Widget.i18n("网易云热搜榜"));
+      const icon = formatCoverUrl(typeof entry.iconUrl === "string" ? entry.iconUrl : undefined);
+      items.push({
+        id: `hot:${rank}`,
+        type: "url",
+        mediaType: "playlist",
+        link: hotSearchLink(word),
+        title: `${rank}. ${word}`,
+        subtitle,
+        ...(icon ? { posterPath: icon, coverUrl: icon } : {}),
+      });
+    });
+    return sliceByPage(items, params);
+  } catch {
+    return [];
+  }
 }
 
 export async function handleSearch(
@@ -711,12 +1296,25 @@ export async function handleSearch(
   const config = syncRuntimeConfig(params);
   const keyword = (params.keyword || "").trim();
   if (!keyword) {
-    return [];
+    return fetchHotSearchItems(params, config);
   }
 
   const kind = (params.kind || "all") as SearchKind;
   const page = parsePage(params.page);
   const offset = resolveOffset(params);
+
+  if (kind === "voices") {
+    const response = await eapiRequest<{
+      data?: { resources?: Array<{ baseInfo?: unknown }> };
+    }>("/api/search/voice/get", { keyword, scene: "normal", limit: DEFAULT_PAGE_SIZE, offset }, config);
+    const resources = Array.isArray(response.data?.resources) ? response.data.resources : [];
+    const programs = resources
+      .map((entry) => parseDjProgram(entry?.baseInfo))
+      .filter((item): item is NcmDjProgramRef => item !== null);
+    const items = dedupeVideoItems(programs.map(toRexDjProgram));
+    cacheSongMetaList(items);
+    return items;
+  }
 
   if (kind === "all") {
     if (page === 1 && offset === 0) {
@@ -748,6 +1346,7 @@ export async function handleSearch(
       ]);
 
       const out: VideoItem[] = [];
+      const tracks: NcmTrackRef[] = [];
       if (artistsRes.status === "fulfilled") {
         const artists = (Array.isArray(artistsRes.value.result?.artists) ? artistsRes.value.result.artists : [])
           .map(parseArtist)
@@ -764,7 +1363,10 @@ export async function handleSearch(
         const songs = (Array.isArray(songsRes.value.result?.songs) ? songsRes.value.result.songs : [])
           .map(parseTrack)
           .filter((item): item is NcmTrackRef => item !== null);
-        for (const song of songs) out.push(toRexSong(song));
+        for (const song of songs) {
+          tracks.push(song);
+          out.push(toRexSong(song));
+        }
       }
       if (playlistsRes.status === "fulfilled") {
         const playlists = (
@@ -780,7 +1382,7 @@ export async function handleSearch(
       }
 
       const deduped = dedupeVideoItems(out);
-      cacheSongMetaList(deduped);
+      cacheTracks(tracks, deduped);
       return deduped;
     }
 
@@ -796,29 +1398,49 @@ export async function handleSearch(
       .map(parseTrack)
       .filter((item): item is NcmTrackRef => item !== null);
     const items = dedupeVideoItems(songs.map(toRexSong));
-    cacheSongMetaList(items);
+    cacheTracks(songs, items);
     return items;
   }
 
   const typeCode = SEARCH_TYPE_CODES[kind];
   const response = await webRequest<{
     result?: {
-      songs?: unknown[];
+      songs?: Array<JsonRecord & { lyrics?: string[] }>;
       albums?: unknown[];
       artists?: unknown[];
       playlists?: unknown[];
+      djRadios?: unknown[];
     };
   }>("/api/cloudsearch/pc", { s: keyword, type: typeCode, limit: DEFAULT_PAGE_SIZE, offset, total: true }, config, {
     method: "POST",
   });
 
-  if (kind === "songs") {
-    const songs = (Array.isArray(response.result?.songs) ? response.result.songs : [])
-      .map(parseTrack)
-      .filter((item): item is NcmTrackRef => item !== null);
-    const items = dedupeVideoItems(songs.map(toRexSong));
-    cacheSongMetaList(items);
-    return items;
+  if (kind === "songs" || kind === "lyrics") {
+    const rawSongs = Array.isArray(response.result?.songs) ? response.result.songs : [];
+    const tracks: NcmTrackRef[] = [];
+    const items: VideoItem[] = [];
+    for (const rawSong of rawSongs) {
+      const parsed = parseTrack(rawSong);
+      if (!parsed) {
+        continue;
+      }
+      tracks.push(parsed);
+      const rexItem = toRexSong(parsed);
+      if (kind === "lyrics" && Array.isArray(rawSong?.lyrics) && rawSong.lyrics.length) {
+        const snippet = rawSong.lyrics
+          .slice(0, 3)
+          .map((line) => (typeof line === "string" ? stripHtmlTags(line) : ""))
+          .filter(Boolean)
+          .join("\n");
+        if (snippet) {
+          rexItem.description = snippet;
+        }
+      }
+      items.push(rexItem);
+    }
+    const deduped = dedupeVideoItems(items);
+    cacheTracks(tracks, deduped);
+    return deduped;
   }
   if (kind === "albums") {
     const albums = (Array.isArray(response.result?.albums) ? response.result.albums : [])
@@ -832,26 +1454,70 @@ export async function handleSearch(
       .filter((item): item is NcmArtistRef => item !== null && Boolean(item.id));
     return dedupeVideoItems(artists.map((a) => toRexArtist(a)));
   }
+  if (kind === "dj") {
+    const radios = (Array.isArray(response.result?.djRadios) ? response.result.djRadios : [])
+      .map(parseDjRadio)
+      .filter((item): item is NcmDjRadioRef => item !== null);
+    return dedupeVideoItems(radios.map(toRexDjRadio));
+  }
   const playlists = (Array.isArray(response.result?.playlists) ? response.result.playlists : [])
     .map(parsePlaylist)
     .filter((item): item is NcmPlaylistRef => item !== null);
   return dedupeVideoItems(playlists.map(toRexPlaylist));
 }
 
+async function fetchSimilarSongs(songId: string, config: RuntimeConfig): Promise<VideoItem[]> {
+  try {
+    const response = await eapiRequest<{ songs?: unknown[] }>(
+      "/api/v1/discovery/simiSong",
+      { songid: songId, limit: 10, offset: 0 },
+      config,
+      { timeout: 6 },
+    );
+    const tracks = (Array.isArray(response.songs) ? response.songs : [])
+      .map(parseTrack)
+      .filter((item): item is NcmTrackRef => item !== null && item.id !== songId);
+    const items = dedupeVideoItems(tracks.map(toRexSong));
+    cacheTracks(tracks, items);
+    return items;
+  } catch {
+    return [];
+  }
+}
+
+async function fetchRelatedPlaylists(playlistId: string, config: RuntimeConfig): Promise<VideoItem[]> {
+  try {
+    const response = await eapiRequest<{
+      data?: { recPlaylist?: Array<{ playlist?: unknown }> };
+    }>("/api/playlist/detail/rcmd/get", { scene: "playlist_head", playlistId, newStyle: "true" }, config, {
+      timeout: 6,
+    });
+    const rows = Array.isArray(response.data?.recPlaylist) ? response.data.recPlaylist : [];
+    const playlists = rows
+      .map((entry) => parsePlaylist(entry?.playlist))
+      .filter((item): item is NcmPlaylistRef => item !== null && item.id !== playlistId);
+    return dedupeVideoItems(playlists.map(toRexPlaylist));
+  } catch {
+    return [];
+  }
+}
+
 async function loadSongDetail(songId: string, config: RuntimeConfig): Promise<VideoItem> {
   let cachedMeta = getCachedSongMeta(songId);
-  const [stream, fetchedMeta] = await Promise.all([
+  const [stream, fetchedMeta, relatedItems, dynamicCover] = await Promise.all([
     resolveAudioStream(songId, config),
     cachedMeta
       ? Promise.resolve(null)
       : fetchSongDetails([songId], config)
           .then((list) => list[0] ?? null)
           .catch(() => null),
+    fetchSimilarSongs(songId, config),
+    fetchSongDynamicCover(songId, config).catch(() => undefined),
   ]);
 
   if (!cachedMeta && fetchedMeta) {
     const rexItem = toRexSong(fetchedMeta);
-    cacheSongMetaList([rexItem]);
+    cacheTracks([fetchedMeta], [rexItem]);
     cachedMeta = {
       id: songId,
       title: rexItem.title,
@@ -861,14 +1527,24 @@ async function loadSongDetail(songId: string, config: RuntimeConfig): Promise<Vi
       duration: rexItem.duration,
       durationText: rexItem.durationText,
       peoples: rexItem.peoples,
+      mvId: fetchedMeta.mvId,
+      albumId: fetchedMeta.album?.id,
     };
   }
+
+  const mvId = cachedMeta?.mvId || fetchedMeta?.mvId || 0;
+  const mvUrl = mvId > 0 ? await fetchMvUrl(mvId, config).catch(() => undefined) : undefined;
 
   const duration = cachedMeta?.duration || 0;
   const durationText = duration > 0 ? formatDuration(duration) : cachedMeta?.durationText;
   const cover = cachedMeta?.posterPath || cachedMeta?.coverUrl;
   const playerType = resolvePlayerType(config.playerType, stream.format);
   const subtitleParts = [cachedMeta?.subtitle || "", stream.isTrial ? Widget.i18n("试听") : ""].filter(Boolean);
+
+  // Best-effort scrobble to keep NetEase listening history and daily picks fresh
+  if (config.reportHistory && parseCookieAuthInput(config.cookie).hasMusicU) {
+    void scrobbleSong(songId, cachedMeta?.albumId, duration || 180, config).catch(() => undefined);
+  }
 
   return {
     id: songId,
@@ -880,6 +1556,9 @@ async function loadSongDetail(songId: string, config: RuntimeConfig): Promise<Vi
     ...(cover ? { posterPath: cover, coverUrl: cover } : {}),
     ...(duration > 0 ? { duration, ...(durationText ? { durationText } : {}) } : {}),
     ...(cachedMeta?.peoples?.length ? { peoples: cachedMeta.peoples } : {}),
+    ...(dynamicCover ? { albumMotionArtwork: dynamicCover } : {}),
+    ...(mvUrl ? { trailers: [{ ...(cover ? { coverUrl: cover } : {}), videoUrl: mvUrl }] } : {}),
+    ...(relatedItems.length ? { relatedItems } : {}),
     videoUrl: stream.url,
     customHeaders: stream.headers,
     ...(playerType ? { playerType } : {}),
@@ -904,7 +1583,7 @@ async function loadAlbumDetail(albumId: string, config: RuntimeConfig): Promise<
     }));
 
   const rexTracks = rawSongs.map(toRexSong);
-  cacheSongMetaList(rexTracks);
+  cacheTracks(rawSongs, rexTracks);
 
   const artistNames = album.artists
     .map((a) => a.name)
@@ -912,6 +1591,8 @@ async function loadAlbumDetail(albumId: string, config: RuntimeConfig): Promise<
     .join(" / ");
   const peoples = toRexPeoples(album.artists);
   const cover = formatCoverUrl(album.imageUrl);
+  const metaLine = [album.subType || "", album.company || ""].filter(Boolean).join(" · ");
+  const description = [metaLine, album.description || ""].filter(Boolean).join("\n") || undefined;
 
   return {
     id: album.id,
@@ -922,16 +1603,20 @@ async function loadAlbumDetail(albumId: string, config: RuntimeConfig): Promise<
     ...(artistNames ? { subtitle: artistNames } : {}),
     ...(cover ? { posterPath: cover, coverUrl: cover } : {}),
     ...(album.released ? { releaseDate: album.released } : {}),
-    ...(album.description ? { description: album.description } : {}),
+    ...(description ? { description } : {}),
     ...(peoples ? { peoples } : {}),
     tracks: rexTracks,
   };
 }
 
 async function loadPlaylistDetail(playlistId: string, config: RuntimeConfig): Promise<VideoItem> {
-  const { playlist, tracks } = await fetchPlaylistTracks(playlistId, config, MAX_PLAYLIST_TRACKS);
+  const [{ playlist, tracks }, relatedItems] = await Promise.all([
+    fetchPlaylistTracks(playlistId, config, MAX_PLAYLIST_TRACKS),
+    fetchRelatedPlaylists(playlistId, config),
+  ]);
   const rexTracks = tracks.map(toRexSong);
-  cacheSongMetaList(rexTracks);
+  cacheTracks(tracks, rexTracks);
+  const genreItems = toRexGenreItems(playlist.tags);
 
   return {
     id: playlist.id,
@@ -942,6 +1627,54 @@ async function loadPlaylistDetail(playlistId: string, config: RuntimeConfig): Pr
     ...(playlist.owner ? { subtitle: playlist.owner } : {}),
     ...(playlist.imageUrl ? { posterPath: playlist.imageUrl, coverUrl: playlist.imageUrl } : {}),
     ...(playlist.description ? { description: playlist.description } : {}),
+    ...(genreItems ? { genreItems } : {}),
+    ...(relatedItems.length ? { relatedItems } : {}),
+    tracks: rexTracks,
+  };
+}
+
+async function loadPodcastDetail(radioId: string, config: RuntimeConfig): Promise<VideoItem> {
+  const { radio, programs } = await fetchDjRadioWithPrograms(radioId, config, MAX_PODCAST_PROGRAMS);
+  const rexTracks = programs.map(toRexDjProgram);
+  cacheSongMetaList(rexTracks);
+  const subtitleParts = [radio.host || "", radio.category || ""].filter(Boolean);
+  const subtitle = subtitleParts.join(" · ") || undefined;
+
+  return {
+    id: `dj:${radio.id}`,
+    type: "url",
+    mediaType: "playlist",
+    link: djLink(radio.id),
+    title: radio.name,
+    ...(subtitle ? { subtitle } : {}),
+    ...(radio.imageUrl ? { posterPath: radio.imageUrl, coverUrl: radio.imageUrl } : {}),
+    ...(radio.description ? { description: radio.description } : {}),
+    tracks: rexTracks,
+  };
+}
+
+async function loadHotSearchDetail(keyword: string, config: RuntimeConfig): Promise<VideoItem> {
+  const response = await webRequest<{ result?: { songs?: unknown[] } }>(
+    "/api/cloudsearch/pc",
+    { s: keyword, type: SEARCH_TYPE_CODES.songs, limit: DEFAULT_PAGE_SIZE, offset: 0, total: true },
+    config,
+    { method: "POST" },
+  );
+  const tracks = (Array.isArray(response.result?.songs) ? response.result.songs : [])
+    .map(parseTrack)
+    .filter((item): item is NcmTrackRef => item !== null);
+  const rexTracks = dedupeVideoItems(tracks.map(toRexSong));
+  cacheTracks(tracks, rexTracks);
+  const cover = rexTracks[0]?.posterPath || rexTracks[0]?.coverUrl;
+
+  return {
+    id: `hot:${keyword}`,
+    type: "url",
+    mediaType: "playlist",
+    link: hotSearchLink(keyword),
+    title: keyword,
+    subtitle: Widget.i18n("网易云热搜榜"),
+    ...(cover ? { posterPath: cover, coverUrl: cover } : {}),
     tracks: rexTracks,
   };
 }
@@ -959,5 +1692,67 @@ export async function handleDetail(link: string): Promise<VideoItem> {
   if (parsed.kind === "album") {
     return loadAlbumDetail(parsed.id, config);
   }
+  if (parsed.kind === "dj") {
+    return loadPodcastDetail(parsed.id, config);
+  }
+  if (parsed.kind === "hot") {
+    return loadHotSearchDetail(parsed.keyword, config);
+  }
   return loadPlaylistDetail(parsed.id, config);
+}
+
+function resolveSongIdFromSubtitleParams(params: { id?: string; link?: string }): string {
+  if (params.link) {
+    const parsed = parseDetailLink(params.link);
+    if (parsed?.kind === "song") {
+      return parsed.id;
+    }
+  }
+  const rawId = (params.id || "").trim();
+  if (isValidNumericId(rawId)) {
+    return rawId;
+  }
+  const parsedFromId = parseDetailLink(rawId);
+  if (parsedFromId?.kind === "song") {
+    return parsedFromId.id;
+  }
+  return "";
+}
+
+export async function handleSubtitle(
+  params: CommonGlobalParams & {
+    id?: string;
+    link?: string;
+    title?: string;
+    seriesName?: string;
+    episodeName?: string;
+  },
+): Promise<SubtitleItem[]> {
+  const config = syncRuntimeConfig(params);
+  let songId = resolveSongIdFromSubtitleParams(params);
+
+  if (!songId) {
+    const query = [params.title || params.episodeName || "", params.seriesName || ""]
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+    if (!query) {
+      return [];
+    }
+    const searchRes = await webRequest<{ result?: { songs?: unknown[] } }>(
+      "/api/cloudsearch/pc",
+      { s: query, type: SEARCH_TYPE_CODES.songs, limit: 1, offset: 0, total: true },
+      config,
+      { method: "POST" },
+    );
+    const first = Array.isArray(searchRes.result?.songs) ? parseTrack(searchRes.result.songs[0]) : null;
+    if (!first) {
+      return [];
+    }
+    songId = first.id;
+  }
+
+  const lyricRes = await fetchSongLyric(songId, config);
+  return buildLyricSubtitleItems(songId, lyricRes);
 }

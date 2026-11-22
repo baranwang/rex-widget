@@ -7,8 +7,10 @@ import {
   handleHome,
   handleLibrary,
   handleNewReleases,
+  handlePodcasts,
   handleRadios,
   handleSearch,
+  handleSubtitle,
 } from "./service";
 
 type MockResponse = {
@@ -385,5 +387,426 @@ describe("netease-music service", () => {
     expect(album.tracks?.[0]?.id).toBe("186016");
 
     await expect(handleDetail("invalid:link")).rejects.toThrow("无法识别");
+  });
+
+  test("handleHome supports high-quality playlists and historical daily recommendations", async () => {
+    stubHttp((opts) => {
+      if (opts.url.includes("/eapi/playlist/highquality/list")) {
+        return { data: { code: 200, playlists: [{ id: 8801, name: "精品华语" }] } };
+      }
+      if (opts.url.includes("/eapi/discovery/recommend/songs/history/recent")) {
+        return { data: { code: 200, data: { dates: ["2026-11-21"] } } };
+      }
+      if (opts.url.includes("/eapi/discovery/recommend/songs/history/detail")) {
+        return {
+          data: {
+            code: 200,
+            data: { songs: [{ id: 5501, name: "昨日推荐", dt: 210000, ar: [{ id: 1, name: "歌手" }] }] },
+          },
+        };
+      }
+      throw new Error(`Unexpected URL: ${opts.url}`);
+    });
+
+    const hq = await handleHome({ filter: "highquality", page: "1" });
+    expect(hq[0]).toMatchObject({ id: "8801", mediaType: "playlist", title: "精品华语" });
+
+    await expect(handleHome({ filter: "history_daily" })).rejects.toThrow("MUSIC_U");
+    const history = await handleHome({
+      cookie: "MUSIC_U=valid_cookie_token_12345678901234567890",
+      filter: "history_daily",
+    });
+    expect(history[0]).toMatchObject({ id: "5501", mediaType: "song", title: "昨日推荐" });
+  });
+
+  test("handleCharts supports artist toplist and handleArtists supports category filters and biography", async () => {
+    stubHttp((opts) => {
+      if (opts.url.includes("/eapi/toplist/artist")) {
+        return { data: { code: 200, list: { artists: [{ id: 3684, name: "林俊杰" }] } } };
+      }
+      if (opts.url.includes("/eapi/v1/artist/list")) {
+        return { data: { code: 200, artists: [{ id: 777, name: "筛选乐队" }] } };
+      }
+      if (opts.url.includes("/api/v1/artist/6452")) {
+        return {
+          data: {
+            code: 200,
+            artist: { id: 6452, name: "周杰伦", briefDesc: "简介", musicSize: 300, albumSize: 20 },
+          },
+        };
+      }
+      if (opts.url.includes("/eapi/artist/introduction")) {
+        return {
+          data: {
+            code: 200,
+            briefDesc: "完整简介",
+            introduction: [{ ti: "主要成就", txt: "多次获得金曲奖" }],
+          },
+        };
+      }
+      throw new Error(`Unexpected URL: ${opts.url}`);
+    });
+
+    const topArtists = await handleCharts({ category: "artists", artistArea: "ZH", page: "1" });
+    expect(topArtists[0]).toMatchObject({ id: "3684", type: "person", title: "林俊杰" });
+
+    const filtered = await handleArtists({ area: "ZH", artistType: "BAND", page: "1" });
+    expect(filtered[0]).toMatchObject({ id: "777", type: "person", title: "筛选乐队" });
+
+    const profile = await handleArtists({ peopleId: "6452", section: "profile" });
+    expect(profile[0]?.description).toContain("完整简介");
+    expect(profile[0]?.description).toContain("主要成就");
+  });
+
+  test("handleGenres supports Style Hall (songs/albums/artists) and high-quality tags", async () => {
+    stubHttp((opts) => {
+      if (opts.url.includes("/eapi/tag/list/get")) {
+        return {
+          data: {
+            code: 200,
+            data: [{ tagId: 1000, tagName: "流行", enName: "Pop", picUrl: "http://p1.music.126.net/p.jpg" }],
+          },
+        };
+      }
+      if (opts.url.includes("/eapi/style-tag/home/song")) {
+        return { data: { code: 200, data: { songs: [{ id: 101, name: "流行热歌", dt: 200000, ar: [] }] } } };
+      }
+      if (opts.url.includes("/eapi/style-tag/home/artist")) {
+        return { data: { code: 200, data: { artists: [{ id: 5781, name: "薛之谦" }] } } };
+      }
+      if (opts.url.includes("/eapi/style-tag/home/album")) {
+        return { data: { code: 200, data: { albums: [{ id: 28539, name: "未完成", artists: [] }] } } };
+      }
+      if (opts.url.includes("/eapi/style-tag/home/playlist")) {
+        return { data: { code: 200, data: { playlist: [{ id: 68458, name: "流行歌单" }] } } };
+      }
+      throw new Error(`Unexpected URL: ${opts.url}`);
+    });
+
+    const styles = await handleGenres({ source: "styles" });
+    expect(styles[0]).toMatchObject({ id: "style:1000", mediaType: "genre", link: "ncm:genre:style:1000" });
+
+    const songs = await handleGenres({ genreId: "ncm:genre:style:1000", section: "songs" });
+    expect(songs[0]).toMatchObject({ id: "101", mediaType: "song" });
+
+    const artists = await handleGenres({ genreId: "ncm:genre:style:1000", section: "artists" });
+    expect(artists[0]).toMatchObject({ id: "5781", type: "person" });
+
+    const albums = await handleGenres({ genreId: "ncm:genre:style:1000", section: "albums" });
+    expect(albums.map((item) => item.mediaType)).toEqual(["album", "playlist"]);
+  });
+
+  test("handleRadios supports anonymous running FM and scene FM modes", async () => {
+    stubHttp((opts) => {
+      if (opts.url.includes("/eapi/radio/sport/get")) {
+        return { data: { code: 200, data: [{ id: 7001, name: "燃脂节奏", dt: 195000, ar: [] }] } };
+      }
+      if (opts.url.includes("/eapi/v1/radio/get")) {
+        return { data: { code: 200, data: [{ id: 7002, name: "运动模式曲目", dt: 210000, ar: [] }] } };
+      }
+      throw new Error(`Unexpected URL: ${opts.url}`);
+    });
+
+    const sport = await handleRadios({ radioId: "ncm:radio:sport" });
+    expect(sport[0]).toMatchObject({ id: "7001", mediaType: "song", title: "燃脂节奏" });
+
+    const scene = await handleRadios({
+      cookie: "MUSIC_U=valid_cookie_token_12345678901234567890",
+      radioId: "ncm:radio:fm:SCENE_EXERCISE",
+    });
+    expect(scene[0]).toMatchObject({ id: "7002", mediaType: "song", title: "运动模式曲目" });
+  });
+
+  test("handlePodcasts, DJ search, and DJ detail resolve playable episodes", async () => {
+    stubHttp((opts) => {
+      if (opts.url.includes("/eapi/djradio/recommend/v1")) {
+        return {
+          data: {
+            code: 200,
+            djRadios: [{ id: 12301, name: "夜谈播客", dj: { nickname: "主播甲" }, category: "情感" }],
+          },
+        };
+      }
+      if (opts.url.includes("/eapi/program/toplist/v1")) {
+        return {
+          data: {
+            code: 200,
+            toplist: [{ program: { id: 99, name: "热门节目1", mainSong: { id: 346304 }, duration: 1800000 } }],
+          },
+        };
+      }
+      if (opts.url.includes("/api/cloudsearch/pc")) {
+        return { data: { code: 200, result: { djRadios: [{ id: 12301, name: "夜谈播客" }] } } };
+      }
+      if (opts.url.includes("/eapi/djradio/v2/get")) {
+        return {
+          data: { code: 200, data: { id: 12301, name: "夜谈播客", desc: "睡前对谈", dj: { nickname: "主播甲" } } },
+        };
+      }
+      if (opts.url.includes("/eapi/dj/program/byradio")) {
+        return {
+          data: {
+            code: 200,
+            programs: [{ id: 99, name: "第一期", mainSong: { id: 346304 }, duration: 1800000 }],
+          },
+        };
+      }
+      throw new Error(`Unexpected URL: ${opts.url}`);
+    });
+
+    const podcasts = await handlePodcasts({ category: "recommend", page: "1" });
+    expect(podcasts[0]).toMatchObject({ id: "dj:12301", link: "ncm:dj:12301", mediaType: "playlist" });
+
+    const programs = await handlePodcasts({ category: "programs", page: "1" });
+    expect(programs[0]).toMatchObject({ id: "346304", link: "ncm:song:346304", mediaType: "song" });
+
+    const searchDj = await handleSearch({ keyword: "夜谈", kind: "dj", page: "1" });
+    expect(searchDj[0]).toMatchObject({ id: "dj:12301", link: "ncm:dj:12301" });
+
+    const detail = await handleDetail("ncm:dj:12301");
+    expect(detail).toMatchObject({ id: "dj:12301", mediaType: "playlist", title: "夜谈播客" });
+    expect(detail.tracks?.[0]).toMatchObject({ id: "346304", link: "ncm:song:346304", title: "第一期" });
+  });
+
+  test("handleLibrary supports recent plays and collected albums/artists/podcasts", async () => {
+    stubHttp((opts) => {
+      if (opts.url.includes("/api/nuser/account/get")) {
+        return { data: { code: 200, profile: { userId: 12345, nickname: "测试用户" } } };
+      }
+      if (opts.url.includes("/eapi/play-record/song/list")) {
+        return { data: { code: 200, data: { list: [{ data: { id: 401, name: "最近歌曲", dt: 180000, ar: [] } }] } } };
+      }
+      if (opts.url.includes("/eapi/album/sublist")) {
+        return { data: { code: 200, data: [{ id: 402, name: "收藏专辑", artists: [] }] } };
+      }
+      if (opts.url.includes("/eapi/artist/sublist")) {
+        return { data: { code: 200, data: [{ id: 403, name: "关注歌手" }] } };
+      }
+      if (opts.url.includes("/eapi/djradio/get/subed")) {
+        return { data: { code: 200, djRadios: [{ id: 404, name: "订阅播客" }] } };
+      }
+      throw new Error(`Unexpected URL: ${opts.url}`);
+    });
+
+    const cookie = "MUSIC_U=token_for_library_12345678901234567890";
+    expect((await handleLibrary({ cookie, tab: "recent_songs" }))[0]).toMatchObject({ id: "401", mediaType: "song" });
+    expect((await handleLibrary({ cookie, tab: "sub_albums" }))[0]).toMatchObject({ id: "402", mediaType: "album" });
+    expect((await handleLibrary({ cookie, tab: "sub_artists" }))[0]).toMatchObject({ id: "403", type: "person" });
+    expect((await handleLibrary({ cookie, tab: "sub_podcasts" }))[0]).toMatchObject({
+      id: "dj:404",
+      link: "ncm:dj:404",
+    });
+  });
+
+  test("handleDetail enriches song with vivid Android UA, dynamic cover, MV trailer, related songs, and scrobble", async () => {
+    let scrobbleCalled = false;
+    let vividUserAgent = "";
+    stubHttp((opts) => {
+      if (opts.url.includes("/eapi/song/enhance/player/url/v1")) {
+        vividUserAgent = opts.headers?.["user-agent"] || "";
+        return {
+          data: {
+            code: 200,
+            data: [
+              {
+                id: 436514312,
+                url: "https://m8.music.126.net/vivid.mp3",
+                type: "mp3",
+                level: "vivid",
+                br: 999000,
+                code: 200,
+              },
+            ],
+          },
+        };
+      }
+      if (opts.url.includes("/api/v3/song/detail")) {
+        return {
+          data: {
+            code: 200,
+            songs: [{ id: 436514312, name: "成都", dt: 328000, mv: 5436712, ar: [{ id: 6731, name: "赵雷" }] }],
+          },
+        };
+      }
+      if (opts.url.includes("/eapi/v1/discovery/simiSong")) {
+        return { data: { code: 200, songs: [{ id: 421563096, name: "我们的时光", dt: 240000, ar: [] }] } };
+      }
+      if (opts.url.includes("/eapi/songplay/dynamic-cover")) {
+        return { data: { code: 200, data: { videoPlayUrl: "http://vod.music.126.net/motion.mp4" } } };
+      }
+      if (opts.url.includes("/eapi/song/enhance/play/mv/url")) {
+        return { data: { code: 200, data: { url: "http://vod.music.126.net/mv.mp4" } } };
+      }
+      if (opts.url.includes("/eapi/feedback/weblog")) {
+        scrobbleCalled = true;
+        return { data: { code: 200 } };
+      }
+      throw new Error(`Unexpected URL: ${opts.url}`);
+    });
+
+    await handleGenres({
+      cookie: "MUSIC_U=svip_cookie_token_12345678901234567890",
+      quality: "vivid",
+      reportHistory: "true",
+    });
+    const detail = await handleDetail("ncm:song:436514312");
+    expect(vividUserAgent).toContain("NeteaseMusic/9.5.61");
+    expect(detail.albumMotionArtwork).toBe("https://vod.music.126.net/motion.mp4");
+    expect(detail.trailers?.[0]?.videoUrl).toBe("https://vod.music.126.net/mv.mp4");
+    expect(detail.relatedItems?.[0]).toMatchObject({ id: "421563096", title: "我们的时光" });
+    expect(scrobbleCalled).toBe(true);
+  });
+
+  test("handleDetail enriches playlist with genreItems and related playlists", async () => {
+    stubHttp((opts) => {
+      if (opts.url.includes("/api/v6/playlist/detail")) {
+        return {
+          data: {
+            code: 200,
+            playlist: {
+              id: 68458,
+              name: "流行精选",
+              tags: ["流行", "华语"],
+              tracks: [{ id: 1, name: "歌1", dt: 180000, ar: [] }],
+              trackIds: [{ id: 1 }],
+            },
+          },
+        };
+      }
+      if (opts.url.includes("/eapi/playlist/detail/rcmd/get")) {
+        return {
+          data: {
+            code: 200,
+            data: { recPlaylist: [{ playlist: { id: 99999, name: "相关推荐歌单" } }] },
+          },
+        };
+      }
+      throw new Error(`Unexpected URL: ${opts.url}`);
+    });
+
+    const detail = await handleDetail("ncm:playlist:68458");
+    expect(detail.genreItems).toEqual([
+      { id: "ncm:genre:流行", title: "流行" },
+      { id: "ncm:genre:华语", title: "华语" },
+    ]);
+    expect(detail.relatedItems?.[0]).toMatchObject({ id: "99999", title: "相关推荐歌单" });
+  });
+
+  test("handleSubtitle resolves lyrics by link and falls back to title search", async () => {
+    stubHttp((opts) => {
+      if (opts.url.includes("/api/cloudsearch/pc")) {
+        return {
+          data: { code: 200, result: { songs: [{ id: 536622304, name: "Lemon", dt: 255000, ar: [] }] } },
+        };
+      }
+      if (opts.url.includes("/eapi/song/lyric")) {
+        return {
+          data: {
+            code: 200,
+            lrc: { lyric: "[00:01.00]夢ならばどれほどよかったでしょう" },
+            tlyric: { lyric: "[00:01.00]如果这一切都是梦境该有多好" },
+            romalrc: { lyric: "[00:01.00]yume naraba dore hodo yokatta deshou" },
+          },
+        };
+      }
+      throw new Error(`Unexpected URL: ${opts.url}`);
+    });
+
+    const byLink = await handleSubtitle({ link: "ncm:song:536622304" });
+    expect(byLink).toHaveLength(4);
+    expect(byLink[0]?.id).toBe("ncm:lyric:536622304:bilingual");
+
+    const byTitle = await handleSubtitle({ title: "Lemon", seriesName: "米津玄師" });
+    expect(byTitle[0]?.id).toBe("ncm:lyric:536622304:bilingual");
+  });
+
+  test("handleSearch supports lyric search, voice search, and empty-keyword hot search detail", async () => {
+    stubHttp((opts) => {
+      if (opts.url.includes("/eapi/hotsearchlist/get")) {
+        return {
+          data: {
+            code: 200,
+            data: [{ searchWord: "晴天", content: "经典华语热搜", score: 99800 }],
+          },
+        };
+      }
+      if (opts.url.includes("/eapi/search/voice/get")) {
+        return {
+          data: {
+            code: 200,
+            data: {
+              resources: [
+                {
+                  baseInfo: {
+                    id: 2540032593,
+                    name: "睡前故事 01",
+                    mainSong: { id: 2134750848 },
+                    duration: 296000,
+                    dj: { nickname: "主播乙" },
+                    radio: { name: "哄睡电台" },
+                  },
+                },
+              ],
+            },
+          },
+        };
+      }
+      if (opts.url.includes("/api/cloudsearch/pc")) {
+        const body = String(opts.data || "");
+        if (body.includes("type=1006")) {
+          return {
+            data: {
+              code: 200,
+              result: {
+                songs: [
+                  {
+                    id: 186016,
+                    name: "晴天",
+                    dt: 269000,
+                    ar: [{ id: 6452, name: "周杰伦" }],
+                    lyrics: ["<b>刮风这天我试过握着你手</b>", "但偏偏雨渐渐大到我看你不见"],
+                  },
+                ],
+              },
+            },
+          };
+        }
+        return {
+          data: {
+            code: 200,
+            result: { songs: [{ id: 186016, name: "晴天", dt: 269000, ar: [{ id: 6452, name: "周杰伦" }] }] },
+          },
+        };
+      }
+      throw new Error(`Unexpected URL: ${opts.url}`);
+    });
+
+    const hotList = await handleSearch({ keyword: "" });
+    expect(hotList[0]).toMatchObject({
+      id: "hot:1",
+      mediaType: "playlist",
+      title: "1. 晴天",
+      subtitle: "经典华语热搜",
+      link: "ncm:hot:%E6%99%B4%E5%A4%A9",
+    });
+
+    const hotDetail = await handleDetail(hotList[0].link || "");
+    expect(hotDetail).toMatchObject({ mediaType: "playlist", title: "晴天" });
+    expect(hotDetail.tracks?.[0]).toMatchObject({ id: "186016", title: "晴天" });
+
+    const byLyrics = await handleSearch({ keyword: "刮风这天", kind: "lyrics", page: "1" });
+    expect(byLyrics[0]).toMatchObject({
+      id: "186016",
+      mediaType: "song",
+      description: "刮风这天我试过握着你手\n但偏偏雨渐渐大到我看你不见",
+    });
+
+    const voices = await handleSearch({ keyword: "睡前故事", kind: "voices", page: "1" });
+    expect(voices[0]).toMatchObject({
+      id: "2134750848",
+      mediaType: "song",
+      link: "ncm:song:2134750848",
+      title: "睡前故事 01",
+    });
   });
 });
