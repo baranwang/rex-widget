@@ -1,5 +1,11 @@
 # @rexnow/youtube-music
 
+## 0.3.0
+
+### Minor Changes
+
+- 006f3f5: Add YouTube Music native lyrics support via Rex's standalone subtitle entrypoint (`loadSubtitle`), returning synced LRC (when `cueRange` is present) and untimed plain text lyrics (`ANDROID_MUSIC` / `WEB_REMIX`) encoded as UTF-8 base64 `data:` URIs.
+
 ## 0.2.1
 
 ### Patch Changes
