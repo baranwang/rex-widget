@@ -9,21 +9,25 @@ import {
   parseHttpsUrlParts,
   setQueryParams,
   sha1,
+  utf8ToBase64,
 } from "./auth";
 import { parseDetailLink } from "./constants";
 
-describe("sha1 and SAPISIDHASH auth", () => {
-  test("matches Node crypto SHA-1 for ASCII, multi-block, CJK, and emoji inputs", () => {
+describe("sha1, base64, and SAPISIDHASH auth", () => {
+  test("matches Node crypto SHA-1 and Buffer base64 for ASCII, multi-block, CJK, and emoji inputs", () => {
     const samples = [
       "",
+      "a",
+      "ab",
       "abc",
       "abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq",
       "1700000000 secret-token https://music.youtube.com",
-      "你好世界 🎵 YouTube Music",
+      "你好世界 🎵 YouTube Music\n[00:00.87] 無敵の笑顔で荒らすメディア",
     ];
     for (const input of samples) {
-      const expected = crypto.createHash("sha1").update(input, "utf8").digest("hex");
-      expect(sha1(input)).toBe(expected);
+      const expectedSha1 = crypto.createHash("sha1").update(input, "utf8").digest("hex");
+      expect(sha1(input)).toBe(expectedSha1);
+      expect(utf8ToBase64(input)).toBe(Buffer.from(input, "utf8").toString("base64"));
     }
   });
 

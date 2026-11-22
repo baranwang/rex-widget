@@ -1,4 +1,5 @@
 import { WIDGET_I18N } from "./i18n";
+import { handleSubtitle } from "./lyrics";
 import {
   handleArtists,
   handleCharts,
@@ -297,6 +298,14 @@ WidgetMetadata = {
         },
       ],
     },
+    {
+      id: "loadSubtitle",
+      title: "歌词",
+      subtitle: "获取歌曲同步歌词与纯文本歌词",
+      type: "subtitle",
+      functionName: "loadSubtitle",
+      params: [],
+    },
   ],
   search: {
     id: "search",
@@ -339,6 +348,8 @@ loadRadios = async (params) => handleRadios(params);
 loadArtists = async (params) => handleArtists(params);
 
 loadLibrary = async (params) => handleLibrary(params);
+
+loadSubtitle = async (params) => handleSubtitle(params);
 
 search = async (params) => handleSearch(params);
 

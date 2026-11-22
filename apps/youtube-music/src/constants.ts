@@ -8,8 +8,11 @@ export const VISION_UA =
 
 export const IOS_UA = "com.google.ios.youtube/20.10.4 (iPhone16,2; U; CPU iOS 18_3_2 like Mac OS X;)";
 
+export const ANDROID_MUSIC_UA = "com.google.android.apps.youtube.music/7.21.50 (Linux; U; Android 14) gzip";
+
 export const VISITOR_DATA_TTL_MS = 6 * 60 * 60 * 1000;
 export const STREAM_CACHE_TTL_MS = 60 * 60 * 1000;
+export const LYRICS_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 export const STREAM_EXPIRY_SAFETY_MARGIN_SECONDS = 5 * 60;
 export const DEFAULT_PAGE_SIZE = 20;
 export const MAX_PLAYLIST_CONTINUATION_PAGES = 5;
@@ -61,12 +64,31 @@ export function normalizeYouTubeLanguage(language?: string): string {
 }
 
 export function buildWebRemixProfile(language?: string): InnertubeClientProfile {
+  const clientVersion = buildWebClientVersion();
   return {
     client: {
       clientName: "WEB_REMIX",
-      clientVersion: buildWebClientVersion(),
+      clientVersion,
       hl: normalizeYouTubeLanguage(language),
     },
+    headers: {
+      "x-youtube-client-name": "67",
+      "x-youtube-client-version": clientVersion,
+    },
+  };
+}
+
+export function buildAndroidMusicProfile(anonymous = false): InnertubeClientProfile {
+  return {
+    client: {
+      clientName: "ANDROID_MUSIC",
+      clientVersion: "7.21.50",
+      androidSdkVersion: 34,
+    },
+    headers: {
+      "user-agent": ANDROID_MUSIC_UA,
+    },
+    ...(anonymous ? { anonymous: true } : {}),
   };
 }
 
