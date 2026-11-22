@@ -10,8 +10,6 @@ export const IOS_UA = "com.google.ios.youtube/20.10.4 (iPhone16,2; U; CPU iOS 18
 
 export const ANDROID_MUSIC_UA = "com.google.android.apps.youtube.music/7.21.50 (Linux; U; Android 14) gzip";
 
-export const LRCLIB_API = "https://lrclib.net/api";
-
 export const VISITOR_DATA_TTL_MS = 6 * 60 * 60 * 1000;
 export const STREAM_CACHE_TTL_MS = 60 * 60 * 1000;
 export const LYRICS_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
@@ -66,11 +64,16 @@ export function normalizeYouTubeLanguage(language?: string): string {
 }
 
 export function buildWebRemixProfile(language?: string): InnertubeClientProfile {
+  const clientVersion = buildWebClientVersion();
   return {
     client: {
       clientName: "WEB_REMIX",
-      clientVersion: buildWebClientVersion(),
+      clientVersion,
       hl: normalizeYouTubeLanguage(language),
+    },
+    headers: {
+      "x-youtube-client-name": "67",
+      "x-youtube-client-version": clientVersion,
     },
   };
 }

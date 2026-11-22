@@ -12,7 +12,7 @@
 - **无需登录即可使用**：首页推荐、排行榜、新发行、流派与心情（原生 `musicGenres`）、电台（原生 `musicRadios`）、歌手资料与作品（原生 `musicArtists`）、搜索（歌曲/专辑/歌手/歌单）、专辑与歌单详情、直接音频播放。
 - **可选 Cookie 登录**：填入 `music.youtube.com` 的请求 Cookie（含 `SAPISID` / `__Secure-3PAPISID`）后，自动使用 `SAPISIDHASH` 认证，解锁个人首页推荐、我喜欢的音乐、我的歌单、最近播放以及可选的收听历史记录上报。
 - **直接音频播放**：主通道沿用 VisionOS 客户端获取无需签名解密的直链音频流，并在失败时自动回退 iOS 客户端；默认优先选择兼容性最佳的 `AAC (M4A)`，也支持在模块设置中切换 `Opus (WebM)`（自动指定 `playerType: "app"` 软解）或最高码率。
-- **同步与纯文本歌词**：通过 Rex 独立字幕入口（`loadSubtitle`）提供歌词，优先返回 YouTube Music / LRCLIB 同步 LRC 歌词，无时间戳时回退返回纯文本歌词。
+- **同步与纯文本歌词**：通过 Rex 独立字幕入口（`loadSubtitle`）提供 YouTube Music 原生歌词，有时间轴时转为标准 LRC，无时间戳时回退返回纯文本歌词。
 - **多语言支持**：内置简体中文、繁体中文与英文界面词典，并根据 Rex 注入的 `language` 参数向 YouTube Music 请求对应语言目录。
 
 ## 安装使用

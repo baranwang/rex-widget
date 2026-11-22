@@ -76,9 +76,7 @@ export const WIDGET_I18N: NonNullable<WidgetMetadata["i18n"]> = {
     歌词: "Lyrics",
     获取歌曲同步歌词与纯文本歌词: "Fetch synced and plain lyrics for songs",
     "YouTube Music（同步歌词）": "YouTube Music (Synced Lyrics)",
-    "LRCLIB（同步歌词）": "LRCLIB (Synced Lyrics)",
     "YouTube Music（纯文本歌词）": "YouTube Music (Plain Lyrics)",
-    "LRCLIB（纯文本歌词）": "LRCLIB (Plain Lyrics)",
   },
   "zh-Hant": {
     "YouTube Music 音乐插件，支持首页推荐、排行榜、新发行、流派、电台、歌手、搜索、专辑、歌单与直接音频播放":
@@ -157,8 +155,6 @@ export const WIDGET_I18N: NonNullable<WidgetMetadata["i18n"]> = {
     歌词: "歌詞",
     获取歌曲同步歌词与纯文本歌词: "取得歌曲同步歌詞與純文字歌詞",
     "YouTube Music（同步歌词）": "YouTube Music（同步歌詞）",
-    "LRCLIB（同步歌词）": "LRCLIB（同步歌詞）",
     "YouTube Music（纯文本歌词）": "YouTube Music（純文字歌詞）",
-    "LRCLIB（纯文本歌词）": "LRCLIB（純文字歌詞）",
   },
 };

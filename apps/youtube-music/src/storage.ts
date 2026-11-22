@@ -49,11 +49,8 @@ export interface CachedAudioStream {
 }
 
 export interface CachedLyrics {
-  ytmSyncedLrc?: string;
-  ytmPlainText?: string;
-  lrclibId?: number;
-  lrclibSyncedLrc?: string;
-  lrclibPlainText?: string;
+  syncedLrc?: string;
+  plainText?: string;
   lang?: string;
   cachedAt: number;
 }
@@ -397,7 +394,7 @@ export function getCachedLyrics(cacheKey: string): CachedLyrics | null {
 }
 
 export function setCachedLyrics(cacheKey: string, entry: Omit<CachedLyrics, "cachedAt">): void {
-  if (!entry.ytmSyncedLrc && !entry.ytmPlainText && !entry.lrclibSyncedLrc && !entry.lrclibPlainText) {
+  if (!entry.syncedLrc && !entry.plainText) {
     return;
   }
   const existing = readStorage<Record<string, CachedLyrics>>(KEYS.lyrics);
