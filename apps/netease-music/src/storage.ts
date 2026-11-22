@@ -1,6 +1,8 @@
 import type { ManagedCookieName, SetCookieUpdate } from "./auth";
 import {
   ACCOUNT_CACHE_TTL_MS,
+  ARTIST_AVATAR_CACHE_TTL_MS,
+  GENRE_COVER_CACHE_TTL_MS,
   type PlayerTypePreference,
   QUALITY_LEVELS,
   type QualityPreference,
@@ -14,10 +16,13 @@ const KEYS = {
   account: "ncm:account",
   streams: "ncm:streams",
   songMeta: "ncm:songMeta",
+  genreCovers: "ncm:genreCovers",
+  artistAvatars: "ncm:artistAvatars",
 } as const;
 
 const MAX_STREAM_ENTRIES = 50;
 const MAX_SONG_META_ENTRIES = 160;
+const MAX_ARTIST_AVATAR_ENTRIES = 300;
 
 export interface RuntimeConfig {
   cookie: string;
@@ -314,4 +319,79 @@ export function getCachedSongMeta(songId: string): CachedSongMeta | null {
     return null;
   }
   return map[songId] ?? null;
+}
+
+interface CachedGenreCoverEntry {
+  url: string;
+  cachedAt: number;
+}
+
+export function getCachedGenreCovers(now = Date.now()): Record<string, string> {
+  const map = readStorage<Record<string, CachedGenreCoverEntry>>(KEYS.genreCovers);
+  if (!map || typeof map !== "object") {
+    return {};
+  }
+  const result: Record<string, string> = {};
+  for (const [key, entry] of Object.entries(map)) {
+    if (entry && typeof entry.url === "string" && typeof entry.cachedAt === "number") {
+      if (now - entry.cachedAt <= GENRE_COVER_CACHE_TTL_MS) {
+        result[key] = entry.url;
+      }
+    }
+  }
+  return result;
+}
+
+export function setCachedGenreCovers(covers: Record<string, string>, now = Date.now()): void {
+  const entries = Object.entries(covers).filter(([, url]) => Boolean(url));
+  if (!entries.length) {
+    return;
+  }
+  const existing = readStorage<Record<string, CachedGenreCoverEntry>>(KEYS.genreCovers);
+  const map: Record<string, CachedGenreCoverEntry> = existing && typeof existing === "object" ? { ...existing } : {};
+  for (const [key, url] of entries) {
+    map[key] = { url, cachedAt: now };
+  }
+  writeStorage(KEYS.genreCovers, map);
+}
+
+interface CachedArtistAvatarEntry {
+  url: string;
+  cachedAt: number;
+}
+
+export function getCachedArtistAvatars(now = Date.now()): Record<string, string> {
+  const map = readStorage<Record<string, CachedArtistAvatarEntry>>(KEYS.artistAvatars);
+  if (!map || typeof map !== "object") {
+    return {};
+  }
+  const result: Record<string, string> = {};
+  for (const [id, entry] of Object.entries(map)) {
+    if (entry && typeof entry.url === "string" && typeof entry.cachedAt === "number") {
+      if (now - entry.cachedAt <= ARTIST_AVATAR_CACHE_TTL_MS) {
+        result[id] = entry.url;
+      }
+    }
+  }
+  return result;
+}
+
+export function cacheArtistAvatars(avatars: Record<string, string>, now = Date.now()): void {
+  const entries = Object.entries(avatars).filter(([id, url]) => Boolean(id && url));
+  if (!entries.length) {
+    return;
+  }
+  const existing = readStorage<Record<string, CachedArtistAvatarEntry>>(KEYS.artistAvatars);
+  const map: Record<string, CachedArtistAvatarEntry> = existing && typeof existing === "object" ? { ...existing } : {};
+  for (const [id, url] of entries) {
+    delete map[id];
+    map[id] = { url, cachedAt: now };
+  }
+  const keys = Object.keys(map);
+  if (keys.length > MAX_ARTIST_AVATAR_ENTRIES) {
+    for (const staleKey of keys.slice(0, keys.length - MAX_ARTIST_AVATAR_ENTRIES)) {
+      delete map[staleKey];
+    }
+  }
+  writeStorage(KEYS.artistAvatars, map);
 }
