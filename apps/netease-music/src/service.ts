@@ -1891,6 +1891,9 @@ async function fetchRelatedPlaylists(playlistId: string, config: RuntimeConfig):
 
 async function loadSongDetail(songId: string, config: RuntimeConfig): Promise<VideoItem> {
   let cachedMeta = getCachedSongMeta(songId);
+  const shouldScrobble = config.reportHistory && parseCookieAuthInput(config.cookie).hasMusicU;
+  const scrobbleUpfront = shouldScrobble && Boolean(cachedMeta);
+
   const [stream, fetchedMeta, relatedItems, dynamicCover] = await Promise.all([
     resolveAudioStream(songId, config),
     cachedMeta
@@ -1900,6 +1903,9 @@ async function loadSongDetail(songId: string, config: RuntimeConfig): Promise<Vi
           .catch(() => null),
     fetchSimilarSongs(songId, config),
     fetchSongDynamicCover(songId, config).catch(() => undefined),
+    scrobbleUpfront
+      ? scrobbleSong(songId, cachedMeta?.albumId, cachedMeta?.duration || 180, config).catch(() => undefined)
+      : Promise.resolve(),
   ]);
 
   if (!cachedMeta && fetchedMeta) {
@@ -1920,18 +1926,19 @@ async function loadSongDetail(songId: string, config: RuntimeConfig): Promise<Vi
   }
 
   const mvId = cachedMeta?.mvId || fetchedMeta?.mvId || 0;
-  const mvUrl = mvId > 0 ? await fetchMvUrl(mvId, config).catch(() => undefined) : undefined;
-
   const duration = cachedMeta?.duration || 0;
+
+  const [mvUrl] = await Promise.all([
+    mvId > 0 ? fetchMvUrl(mvId, config).catch(() => undefined) : Promise.resolve(undefined),
+    shouldScrobble && !scrobbleUpfront
+      ? scrobbleSong(songId, cachedMeta?.albumId, duration || 180, config).catch(() => undefined)
+      : Promise.resolve(),
+  ]);
+
   const durationText = duration > 0 ? formatDuration(duration) : cachedMeta?.durationText;
   const cover = cachedMeta?.posterPath || cachedMeta?.coverUrl;
   const playerType = resolvePlayerType(config.playerType, stream.format);
   const subtitleParts = [cachedMeta?.subtitle || "", stream.isTrial ? Widget.i18n("试听") : ""].filter(Boolean);
-
-  // Best-effort scrobble to keep NetEase listening history and daily picks fresh
-  if (config.reportHistory && parseCookieAuthInput(config.cookie).hasMusicU) {
-    void scrobbleSong(songId, cachedMeta?.albumId, duration || 180, config).catch(() => undefined);
-  }
 
   return {
     id: songId,

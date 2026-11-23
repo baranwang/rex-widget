@@ -1,5 +1,6 @@
 export const NCM_SITE = "https://music.163.com";
 export const NCM_EAPI_HOST = "https://interfacepc.music.163.com";
+export const NCM_CLIENTLOG_HOST = "https://clientlog.music.163.com";
 export const EAPI_KEY = "e82ckenh8dichen8";
 
 export const WEB_UA =
@@ -9,6 +10,15 @@ export const EAPI_CLIENT = {
   osver: "Microsoft-Windows-10-Professional-build-19045-64bit",
   os: "pc",
   appver: "3.1.29.205117",
+  versioncode: "140",
+  resolution: "1920x1080",
+  channel: "netease",
+} as const;
+
+export const EAPI_CLIENT_OSX = {
+  osver: "15.5",
+  os: "osx",
+  appver: "3.1.10.5100",
   versioncode: "140",
   resolution: "1920x1080",
   channel: "netease",
@@ -24,6 +34,8 @@ export const EAPI_CLIENT_ANDROID = {
 } as const;
 
 export const EAPI_UA = `Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Safari/537.36 Chrome/91.0.4472.164 NeteaseMusicDesktop/${EAPI_CLIENT.appver}`;
+export const EAPI_OSX_UA =
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 export const EAPI_ANDROID_UA =
   "NeteaseMusic/9.5.61.260802021928(9005061);Dalvik/2.1.0 (Linux; U; Android 12; HBN-AL00 Build/cd737a2.0)";
 

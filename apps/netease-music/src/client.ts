@@ -3,9 +3,12 @@ import {
   EAPI_ANDROID_UA,
   EAPI_CLIENT,
   EAPI_CLIENT_ANDROID,
+  EAPI_CLIENT_OSX,
+  EAPI_OSX_UA,
   EAPI_UA,
   formatCoverUrl,
   isFlacQuality,
+  NCM_CLIENTLOG_HOST,
   NCM_EAPI_HOST,
   NCM_SITE,
   normalizeHttpsUrl,
@@ -200,14 +203,24 @@ export async function eapiRequest<T extends JsonRecord = JsonRecord>(
   path: string,
   payload: Record<string, unknown>,
   config: RuntimeConfig,
-  options: { allowedCodes?: readonly number[]; timeout?: number; clientProfile?: "pc" | "android" } = {},
+  options: {
+    allowedCodes?: readonly number[];
+    timeout?: number;
+    clientProfile?: "pc" | "android" | "osx";
+    host?: string;
+  } = {},
 ): Promise<T> {
   const cookies = buildMergedCookies(config);
   const now = Date.now();
   const deviceId = getOrCreateDeviceId();
-  const useAndroid = options.clientProfile === "android";
-  const client = useAndroid ? EAPI_CLIENT_ANDROID : EAPI_CLIENT;
-  const userAgent = useAndroid ? EAPI_ANDROID_UA : EAPI_UA;
+  const client =
+    options.clientProfile === "android"
+      ? EAPI_CLIENT_ANDROID
+      : options.clientProfile === "osx"
+        ? EAPI_CLIENT_OSX
+        : EAPI_CLIENT;
+  const userAgent =
+    options.clientProfile === "android" ? EAPI_ANDROID_UA : options.clientProfile === "osx" ? EAPI_OSX_UA : EAPI_UA;
 
   const header: Record<string, string> = {
     ...client,
@@ -234,7 +247,8 @@ export async function eapiRequest<T extends JsonRecord = JsonRecord>(
     .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
     .join("; ");
 
-  const url = `${NCM_EAPI_HOST}${path.replace(/^\/api\//, "/eapi/")}`;
+  const host = options.host || NCM_EAPI_HOST;
+  const url = `${host}${path.replace(/^\/api\//, "/eapi/")}`;
   const response = await Widget.http.request<T>({
     url,
     method: "POST",
@@ -467,6 +481,28 @@ export async function scrobbleSong(
   if (!config.reportHistory || !parseCookieAuthInput(config.cookie).hasMusicU) {
     return;
   }
+  const normalizedSourceId = /^\d+$/.test(String(sourceId || "")) ? String(sourceId) : "0";
+  const basePayload = {
+    id: songId,
+    type: "song",
+    mainsite: "1",
+    mainsiteWeb: "1",
+    content: `id=${normalizedSourceId}`,
+  };
+  const scrobbleOpts = { host: NCM_CLIENTLOG_HOST, clientProfile: "osx" as const, timeout: 4 };
+  await eapiRequest(
+    "/api/feedback/weblog",
+    {
+      logs: JSON.stringify([
+        {
+          action: "startplay",
+          json: basePayload,
+        },
+      ]),
+    },
+    config,
+    scrobbleOpts,
+  );
   await eapiRequest(
     "/api/feedback/weblog",
     {
@@ -474,22 +510,19 @@ export async function scrobbleSong(
         {
           action: "play",
           json: {
+            ...basePayload,
             download: 0,
             end: "playend",
-            id: songId,
-            sourceId: sourceId || "",
+            sourceId: normalizedSourceId,
             time: Math.max(0, Math.round(durationSec)),
-            type: "song",
             wifi: 0,
             source: "list",
-            mainsite: 1,
-            content: "",
           },
         },
       ]),
     },
     config,
-    { timeout: 6 },
+    scrobbleOpts,
   );
 }
 
