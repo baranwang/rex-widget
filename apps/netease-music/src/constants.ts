@@ -2,6 +2,8 @@ export const NCM_SITE = "https://music.163.com";
 export const NCM_EAPI_HOST = "https://interfacepc.music.163.com";
 export const NCM_CLIENTLOG_HOST = "https://clientlog.music.163.com";
 export const EAPI_KEY = "e82ckenh8dichen8";
+export const NCM_CHECK_TOKEN =
+  "9ca17ae2e6ffcda170e2e6ee8af14fbabdb988f225b3868eb2c15a879b9a83d274a790ac8ff54a97b889d5d42af0feaec3b92af58cff99c470a7eafd88f75e839a9ea7c14e909da883e83fb692a3abdb6b92adee9e";
 
 export const WEB_UA =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36";
@@ -47,8 +49,23 @@ export const MAX_PODCAST_PROGRAMS = 100;
 export const SONG_DETAIL_BATCH_SIZE = 100;
 export const STREAM_CACHE_TTL_MS = 15 * 60 * 1000;
 export const ACCOUNT_CACHE_TTL_MS = 30 * 60 * 1000;
+export const FAVORITES_CACHE_TTL_MS = 10 * 60 * 1000;
 export const GENRE_COVER_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 export const ARTIST_AVATAR_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+export const FAVORITE_ACTION_FN = "toggleFavorite";
+export const ITEM_ACTION_IDS = {
+  likeSong: "like_song",
+  unlikeSong: "unlike_song",
+  subPlaylist: "sub_playlist",
+  unsubPlaylist: "unsub_playlist",
+  subAlbum: "sub_album",
+  unsubAlbum: "unsub_album",
+  subArtist: "sub_artist",
+  unsubArtist: "unsub_artist",
+  subPodcast: "sub_podcast",
+  unsubPodcast: "unsub_podcast",
+} as const;
 
 export type QualityPreference =
   | "standard"

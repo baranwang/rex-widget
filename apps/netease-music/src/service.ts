@@ -2,13 +2,23 @@ import { parseCookieAuthInput } from "./auth";
 import {
   eapiRequest,
   fetchArtistAvatarsBatch,
+  fetchLikedSongIds,
   fetchMvUrl,
   fetchSongDetails,
   fetchSongDynamicCover,
   fetchSongLyric,
+  fetchSubscribedAlbumIds,
+  fetchSubscribedArtistIds,
+  fetchSubscribedPodcastIds,
+  fetchUserPlaylistOwnership,
   resolveAccountUid,
   resolveAudioStream,
   scrobbleSong,
+  toggleAlbumSubscribe,
+  toggleArtistSubscribe,
+  togglePlaylistSubscribe,
+  togglePodcastSubscribe,
+  toggleSongLike,
   webRequest,
 } from "./client";
 import {
@@ -21,9 +31,11 @@ import {
   CURATED_GENRES,
   DEFAULT_PAGE_SIZE,
   djLink,
+  FAVORITE_ACTION_FN,
   formatCoverUrl,
   genreLink,
   hotSearchLink,
+  ITEM_ACTION_IDS,
   isValidNumericId,
   LINK_PREFIX,
   MAX_PLAYLIST_TRACKS,
@@ -71,13 +83,17 @@ import {
 import {
   cacheArtistAvatars,
   cacheSongMetaList,
+  getCachedFavoriteIds,
   getCachedGenreCovers,
   getCachedSongMeta,
   getRuntimeConfig,
+  mergeCachedFavoriteIds,
   type RuntimeConfig,
+  setCachedFavoriteIds,
   setCachedGenreCovers,
   syncRuntimeConfig,
   type TrackCacheHint,
+  updateCachedFavoriteId,
 } from "./storage";
 
 interface CommonGlobalParams {
@@ -233,9 +249,7 @@ async function fetchDjRadioWithPrograms(
   return { radio, programs };
 }
 
-export async function handleHome(
-  params: CommonGlobalParams & PaginationParams & { filter?: string },
-): Promise<VideoItem[]> {
+async function loadHomeList(params: CommonGlobalParams & PaginationParams & { filter?: string }): Promise<VideoItem[]> {
   const config = syncRuntimeConfig(params);
   const filter = (params.filter || "all") as "all" | "daily" | "history_daily" | "highquality" | "songs" | "playlists";
   const hasCookie = parseCookieAuthInput(config.cookie).hasMusicU;
@@ -413,7 +427,7 @@ function attachBannerMedia(item: VideoItem, bannerImage: string | undefined, typ
   };
 }
 
-export async function handleBanners(
+async function loadBannersList(
   params: CommonGlobalParams & PaginationParams & { clientType?: string },
 ): Promise<VideoItem[]> {
   const config = syncRuntimeConfig(params);
@@ -583,7 +597,7 @@ export async function handleBanners(
   return sliceByPage(deduped, params);
 }
 
-export async function handleCharts(
+async function loadChartsList(
   params: CommonGlobalParams & PaginationParams & { category?: string; artistArea?: string },
 ): Promise<VideoItem[]> {
   const config = syncRuntimeConfig(params);
@@ -621,7 +635,7 @@ export async function handleCharts(
   return sliceByPage(dedupeVideoItems(playlists.map(toRexPlaylist)), params);
 }
 
-export async function handleNewReleases(
+async function loadNewReleasesList(
   params: CommonGlobalParams & PaginationParams & { category?: string; area?: string },
 ): Promise<VideoItem[]> {
   const config = syncRuntimeConfig(params);
@@ -831,7 +845,7 @@ async function fetchCuratedCategoryArtists(
   return null;
 }
 
-export async function handleGenres(
+async function loadGenresList(
   params: CommonGlobalParams & PaginationParams & { genreId?: string; section?: string; source?: string },
 ): Promise<VideoItem[]> {
   const config = syncRuntimeConfig(params);
@@ -1104,7 +1118,7 @@ const FM_MODE_MAP: Record<string, { mode: string; subMode: string }> = {
   "fm:SCENE_NIGHT": { mode: "SCENE_RCMD", subMode: "NIGHT_EMO" },
 };
 
-export async function handleRadios(
+async function loadRadiosList(
   params: CommonGlobalParams & PaginationParams & { radioId?: string; section?: string },
 ): Promise<VideoItem[]> {
   const config = syncRuntimeConfig(params);
@@ -1268,7 +1282,7 @@ export async function handleRadios(
   return sliceByPage(items, params);
 }
 
-export async function handlePodcasts(
+async function loadPodcastsList(
   params: CommonGlobalParams & PaginationParams & { category?: string },
 ): Promise<VideoItem[]> {
   const config = syncRuntimeConfig(params);
@@ -1321,7 +1335,7 @@ export async function handlePodcasts(
   return sliceByPage(dedupeVideoItems(radios.map(toRexDjRadio)), params);
 }
 
-export async function handleArtists(
+async function loadArtistsList(
   params: CommonGlobalParams &
     PaginationParams & { peopleId?: string; section?: string; area?: string; artistType?: string },
 ): Promise<VideoItem[]> {
@@ -1468,9 +1482,7 @@ export async function handleArtists(
   return items;
 }
 
-export async function handleLibrary(
-  params: CommonGlobalParams & PaginationParams & { tab?: string },
-): Promise<VideoItem[]> {
+async function loadLibraryList(params: CommonGlobalParams & PaginationParams & { tab?: string }): Promise<VideoItem[]> {
   const config = syncRuntimeConfig(params);
   const tab = (params.tab || "liked") as
     | "liked"
@@ -1487,6 +1499,7 @@ export async function handleLibrary(
   const offset = resolveOffset(params);
 
   const { uid } = await resolveAccountUid(config);
+  const cookieKey = parseCookieAuthInput(config.cookie).cookies.MUSIC_U || "";
 
   if (tab === "recent_songs") {
     const response = await eapiRequest<{ data?: { list?: Array<{ data?: unknown }> } }>(
@@ -1535,6 +1548,11 @@ export async function handleLibrary(
     const albums = (Array.isArray(response.data) ? response.data : [])
       .map(parseAlbum)
       .filter((item): item is NcmAlbumRef => item !== null);
+    mergeCachedFavoriteIds(
+      cookieKey,
+      "albums",
+      albums.map((a) => a.id),
+    );
     return dedupeVideoItems(albums.map(toRexAlbum));
   }
 
@@ -1547,6 +1565,11 @@ export async function handleLibrary(
     const artists = (Array.isArray(response.data) ? response.data : [])
       .map(parseArtist)
       .filter((item): item is NcmArtistRef => item !== null && Boolean(item.id));
+    mergeCachedFavoriteIds(
+      cookieKey,
+      "artists",
+      artists.map((a) => a.id),
+    );
     return dedupeVideoItems(artists.map((a) => toRexArtist(a)));
   }
 
@@ -1559,6 +1582,11 @@ export async function handleLibrary(
     const radios = (Array.isArray(response.djRadios) ? response.djRadios : [])
       .map(parseDjRadio)
       .filter((item): item is NcmDjRadioRef => item !== null);
+    mergeCachedFavoriteIds(
+      cookieKey,
+      "podcasts",
+      radios.map((r) => r.id),
+    );
     return dedupeVideoItems(radios.map(toRexDjRadio));
   }
 
@@ -1611,12 +1639,33 @@ export async function handleLibrary(
     return sliceByPage(items, params);
   }
 
-  const plResponse = await webRequest<{ playlist?: Array<JsonRecord & { specialType?: number }> }>(
+  const plResponse = await webRequest<{
+    playlist?: Array<JsonRecord & { specialType?: number; subscribed?: boolean; userId?: number | string }>;
+  }>(
     "/api/user/playlist",
     { uid, limit: tab === "playlists" ? DEFAULT_PAGE_SIZE : 30, offset: tab === "playlists" ? offset : 0 },
     config,
   );
   const rawPlaylists = Array.isArray(plResponse.playlist) ? plResponse.playlist : [];
+  const subscribedPlaylistIds: string[] = [];
+  const ownedPlaylistIds: string[] = [];
+  for (const pl of rawPlaylists) {
+    const id = pl?.id !== undefined ? String(pl.id) : "";
+    if (!isValidNumericId(id)) {
+      continue;
+    }
+    if (pl.subscribed === true) {
+      subscribedPlaylistIds.push(id);
+    } else if (pl.userId !== undefined && String(pl.userId) === uid) {
+      ownedPlaylistIds.push(id);
+    }
+  }
+  if (subscribedPlaylistIds.length) {
+    mergeCachedFavoriteIds(cookieKey, "playlists", subscribedPlaylistIds);
+  }
+  if (ownedPlaylistIds.length) {
+    mergeCachedFavoriteIds(cookieKey, "ownedPlaylists", ownedPlaylistIds);
+  }
 
   if (tab === "playlists") {
     const playlists = rawPlaylists.map(parsePlaylist).filter((item): item is NcmPlaylistRef => item !== null);
@@ -1630,6 +1679,11 @@ export async function handleLibrary(
     return [];
   }
   const { tracks } = await fetchPlaylistTracks(likedId, config, MAX_PLAYLIST_TRACKS);
+  mergeCachedFavoriteIds(
+    cookieKey,
+    "songs",
+    tracks.map((t) => t.id),
+  );
   const items = dedupeVideoItems(tracks.map(toRexSong));
   cacheTracks(tracks, items);
   return sliceByPage(items, params);
@@ -1677,7 +1731,7 @@ async function fetchHotSearchItems(params: PaginationParams, config: RuntimeConf
   }
 }
 
-export async function handleSearch(
+async function loadSearchList(
   params: CommonGlobalParams & PaginationParams & { keyword?: string; kind?: string },
 ): Promise<VideoItem[]> {
   const config = syncRuntimeConfig(params);
@@ -2073,6 +2127,345 @@ async function loadHotSearchDetail(keyword: string, config: RuntimeConfig): Prom
   };
 }
 
+type FavoriteKind = "song" | "playlist" | "album" | "artist" | "podcast";
+
+interface FavoriteStateSnapshot {
+  songs: Set<string>;
+  playlists: Set<string>;
+  ownedPlaylists: Set<string>;
+  albums: Set<string>;
+  artists: Set<string>;
+  podcasts: Set<string>;
+}
+
+function classifyFavoriteItem(item: VideoItemChild): { kind: FavoriteKind; resourceId: string } | null {
+  const id = String(item.id ?? "").trim();
+  if (!id) {
+    return null;
+  }
+  if (item.mediaType === "song" && isValidNumericId(id)) {
+    return { kind: "song", resourceId: id };
+  }
+  if (item.mediaType === "album" && isValidNumericId(id)) {
+    return { kind: "album", resourceId: id };
+  }
+  if (item.mediaType === "playlist") {
+    if (isValidNumericId(id)) {
+      return { kind: "playlist", resourceId: id };
+    }
+    if (id.startsWith("dj:")) {
+      const radioId = id.slice(3);
+      if (isValidNumericId(radioId)) {
+        return { kind: "podcast", resourceId: radioId };
+      }
+    }
+  }
+  if ((item.type === "person" || item.mediaType === "person") && isValidNumericId(id)) {
+    return { kind: "artist", resourceId: id };
+  }
+  return null;
+}
+
+async function hydrateFavoriteStates(
+  items: readonly VideoItemChild[],
+  config: RuntimeConfig,
+): Promise<FavoriteStateSnapshot | null> {
+  const parsedAuth = parseCookieAuthInput(config.cookie);
+  if (!parsedAuth.hasMusicU) {
+    return null;
+  }
+  const cookieKey = parsedAuth.cookies.MUSIC_U;
+  const needed = new Set<FavoriteKind>();
+  for (const item of items) {
+    const classified = classifyFavoriteItem(item);
+    if (classified) {
+      needed.add(classified.kind);
+    }
+  }
+  if (!needed.size) {
+    return null;
+  }
+
+  let songs = getCachedFavoriteIds(cookieKey, "songs");
+  let playlists = getCachedFavoriteIds(cookieKey, "playlists");
+  let ownedPlaylists = getCachedFavoriteIds(cookieKey, "ownedPlaylists");
+  let albums = getCachedFavoriteIds(cookieKey, "albums");
+  let artists = getCachedFavoriteIds(cookieKey, "artists");
+  let podcasts = getCachedFavoriteIds(cookieKey, "podcasts");
+
+  const tasks: Promise<void>[] = [];
+  if (needed.has("song") && songs === null) {
+    tasks.push(
+      fetchLikedSongIds(config)
+        .then((ids) => {
+          setCachedFavoriteIds(cookieKey, "songs", ids);
+          songs = new Set(ids);
+        })
+        .catch(() => undefined),
+    );
+  }
+  if (needed.has("playlist") && playlists === null) {
+    tasks.push(
+      fetchUserPlaylistOwnership(config)
+        .then(({ subscribed, owned }) => {
+          setCachedFavoriteIds(cookieKey, "playlists", subscribed);
+          setCachedFavoriteIds(cookieKey, "ownedPlaylists", owned);
+          playlists = new Set(subscribed);
+          ownedPlaylists = new Set(owned);
+        })
+        .catch(() => undefined),
+    );
+  }
+  if (needed.has("album") && albums === null) {
+    tasks.push(
+      fetchSubscribedAlbumIds(config)
+        .then((ids) => {
+          setCachedFavoriteIds(cookieKey, "albums", ids);
+          albums = new Set(ids);
+        })
+        .catch(() => undefined),
+    );
+  }
+  if (needed.has("artist") && artists === null) {
+    tasks.push(
+      fetchSubscribedArtistIds(config)
+        .then((ids) => {
+          setCachedFavoriteIds(cookieKey, "artists", ids);
+          artists = new Set(ids);
+        })
+        .catch(() => undefined),
+    );
+  }
+  if (needed.has("podcast") && podcasts === null) {
+    tasks.push(
+      fetchSubscribedPodcastIds(config)
+        .then((ids) => {
+          setCachedFavoriteIds(cookieKey, "podcasts", ids);
+          podcasts = new Set(ids);
+        })
+        .catch(() => undefined),
+    );
+  }
+
+  if (tasks.length) {
+    await Promise.allSettled(tasks);
+  }
+
+  return {
+    songs: songs ?? new Set<string>(),
+    playlists: playlists ?? new Set<string>(),
+    ownedPlaylists: ownedPlaylists ?? new Set<string>(),
+    albums: albums ?? new Set<string>(),
+    artists: artists ?? new Set<string>(),
+    podcasts: podcasts ?? new Set<string>(),
+  };
+}
+
+function buildFavoriteAction(item: VideoItemChild, state: FavoriteStateSnapshot): WidgetAction | null {
+  const classified = classifyFavoriteItem(item);
+  if (!classified) {
+    return null;
+  }
+  switch (classified.kind) {
+    case "song": {
+      const liked = state.songs.has(classified.resourceId);
+      return {
+        id: liked ? ITEM_ACTION_IDS.unlikeSong : ITEM_ACTION_IDS.likeSong,
+        title: Widget.i18n(liked ? "取消红心" : "红心喜欢"),
+        functionName: FAVORITE_ACTION_FN,
+      };
+    }
+    case "playlist": {
+      if (state.ownedPlaylists.has(classified.resourceId)) {
+        return null;
+      }
+      const subscribed = state.playlists.has(classified.resourceId);
+      return {
+        id: subscribed ? ITEM_ACTION_IDS.unsubPlaylist : ITEM_ACTION_IDS.subPlaylist,
+        title: Widget.i18n(subscribed ? "取消收藏" : "收藏歌单"),
+        functionName: FAVORITE_ACTION_FN,
+      };
+    }
+    case "album": {
+      const subscribed = state.albums.has(classified.resourceId);
+      return {
+        id: subscribed ? ITEM_ACTION_IDS.unsubAlbum : ITEM_ACTION_IDS.subAlbum,
+        title: Widget.i18n(subscribed ? "取消收藏" : "收藏专辑"),
+        functionName: FAVORITE_ACTION_FN,
+      };
+    }
+    case "artist": {
+      const subscribed = state.artists.has(classified.resourceId);
+      return {
+        id: subscribed ? ITEM_ACTION_IDS.unsubArtist : ITEM_ACTION_IDS.subArtist,
+        title: Widget.i18n(subscribed ? "取消关注" : "关注歌手"),
+        functionName: FAVORITE_ACTION_FN,
+      };
+    }
+    case "podcast": {
+      const subscribed = state.podcasts.has(classified.resourceId);
+      return {
+        id: subscribed ? ITEM_ACTION_IDS.unsubPodcast : ITEM_ACTION_IDS.subPodcast,
+        title: Widget.i18n(subscribed ? "取消订阅" : "订阅播客"),
+        functionName: FAVORITE_ACTION_FN,
+      };
+    }
+  }
+}
+
+function applyFavoriteAction<T extends VideoItemChild>(item: T, state: FavoriteStateSnapshot): T {
+  const action = buildFavoriteAction(item, state);
+  if (!action) {
+    return item;
+  }
+  const existing = (item.actions ?? []).filter((entry) => entry.functionName !== FAVORITE_ACTION_FN);
+  return {
+    ...item,
+    actions: [action, ...existing],
+  };
+}
+
+async function attachFavoriteActionsToList(items: VideoItem[], config: RuntimeConfig): Promise<VideoItem[]> {
+  if (!items.length) {
+    return items;
+  }
+  const state = await hydrateFavoriteStates(items, config);
+  if (!state) {
+    return items;
+  }
+  return items.map((item) => applyFavoriteAction(item, state));
+}
+
+async function attachFavoriteActionsToDetail(detail: VideoItem, config: RuntimeConfig): Promise<VideoItem> {
+  const allItems: VideoItemChild[] = [
+    detail,
+    ...(detail.tracks ?? []),
+    ...(detail.childItems ?? []),
+    ...(detail.relatedItems ?? []),
+  ];
+  const state = await hydrateFavoriteStates(allItems, config);
+  if (!state) {
+    return detail;
+  }
+  const enriched = applyFavoriteAction(detail, state);
+  return {
+    ...enriched,
+    ...(detail.tracks ? { tracks: detail.tracks.map((item) => applyFavoriteAction(item, state)) } : {}),
+    ...(detail.childItems ? { childItems: detail.childItems.map((item) => applyFavoriteAction(item, state)) } : {}),
+    ...(detail.relatedItems
+      ? { relatedItems: detail.relatedItems.map((item) => applyFavoriteAction(item, state)) }
+      : {}),
+  };
+}
+
+function withFavoriteActions<P extends CommonGlobalParams>(
+  loader: (params: P) => Promise<VideoItem[]>,
+): (params: P) => Promise<VideoItem[]> {
+  return async (params: P) => {
+    const items = await loader(params);
+    return attachFavoriteActionsToList(items, getRuntimeConfig());
+  };
+}
+
+export const handleHome = withFavoriteActions(loadHomeList);
+export const handleBanners = withFavoriteActions(loadBannersList);
+export const handleCharts = withFavoriteActions(loadChartsList);
+export const handleNewReleases = withFavoriteActions(loadNewReleasesList);
+export const handleGenres = withFavoriteActions(loadGenresList);
+export const handleRadios = withFavoriteActions(loadRadiosList);
+export const handlePodcasts = withFavoriteActions(loadPodcastsList);
+export const handleArtists = withFavoriteActions(loadArtistsList);
+export const handleLibrary = withFavoriteActions(loadLibraryList);
+export const handleSearch = withFavoriteActions(loadSearchList);
+
+export async function handleToggleFavorite(
+  params: CommonGlobalParams & WidgetItemActionParams,
+): Promise<WidgetActionResult> {
+  const config = syncRuntimeConfig(params);
+  const parsedAuth = parseCookieAuthInput(config.cookie);
+  if (!parsedAuth.hasMusicU) {
+    return { message: Widget.i18n("请在模块设置中填写包含 MUSIC_U 的网易云音乐 Cookie 后操作") };
+  }
+  const cookieKey = parsedAuth.cookies.MUSIC_U;
+  const actionId = (params.actionId || "").trim();
+  const rawItemId = String(params.itemId || "").trim();
+
+  switch (actionId) {
+    case ITEM_ACTION_IDS.likeSong:
+    case ITEM_ACTION_IDS.unlikeSong: {
+      const songId = stripPrefix(rawItemId, LINK_PREFIX.song);
+      if (!isValidNumericId(songId)) {
+        return { message: Widget.i18n("无法识别该歌曲 ID") };
+      }
+      const like = actionId === ITEM_ACTION_IDS.likeSong;
+      await toggleSongLike(songId, like, config);
+      updateCachedFavoriteId(cookieKey, "songs", songId, like);
+      return {
+        message: Widget.i18n(like ? "已加入我喜欢的音乐" : "已取消红心喜欢"),
+        refresh: true,
+      };
+    }
+    case ITEM_ACTION_IDS.subPlaylist:
+    case ITEM_ACTION_IDS.unsubPlaylist: {
+      const playlistId = stripPrefix(rawItemId, LINK_PREFIX.playlist);
+      if (!isValidNumericId(playlistId)) {
+        return { message: Widget.i18n("无法识别该歌单 ID") };
+      }
+      const subscribe = actionId === ITEM_ACTION_IDS.subPlaylist;
+      await togglePlaylistSubscribe(playlistId, subscribe, config);
+      updateCachedFavoriteId(cookieKey, "playlists", playlistId, subscribe);
+      return {
+        message: Widget.i18n(subscribe ? "已收藏歌单" : "已取消收藏歌单"),
+        refresh: true,
+      };
+    }
+    case ITEM_ACTION_IDS.subAlbum:
+    case ITEM_ACTION_IDS.unsubAlbum: {
+      const albumId = stripPrefix(rawItemId, LINK_PREFIX.album);
+      if (!isValidNumericId(albumId)) {
+        return { message: Widget.i18n("无法识别该专辑 ID") };
+      }
+      const subscribe = actionId === ITEM_ACTION_IDS.subAlbum;
+      await toggleAlbumSubscribe(albumId, subscribe, config);
+      updateCachedFavoriteId(cookieKey, "albums", albumId, subscribe);
+      return {
+        message: Widget.i18n(subscribe ? "已收藏专辑" : "已取消收藏专辑"),
+        refresh: true,
+      };
+    }
+    case ITEM_ACTION_IDS.subArtist:
+    case ITEM_ACTION_IDS.unsubArtist: {
+      const artistId = stripPrefix(rawItemId, "ncm:artist:");
+      if (!isValidNumericId(artistId)) {
+        return { message: Widget.i18n("无法识别该歌手 ID") };
+      }
+      const subscribe = actionId === ITEM_ACTION_IDS.subArtist;
+      await toggleArtistSubscribe(artistId, subscribe, config);
+      updateCachedFavoriteId(cookieKey, "artists", artistId, subscribe);
+      return {
+        message: Widget.i18n(subscribe ? "已关注歌手" : "已取消关注歌手"),
+        refresh: true,
+      };
+    }
+    case ITEM_ACTION_IDS.subPodcast:
+    case ITEM_ACTION_IDS.unsubPodcast: {
+      const radioId = stripPrefix(stripPrefix(rawItemId, LINK_PREFIX.dj), "dj:");
+      if (!isValidNumericId(radioId)) {
+        return { message: Widget.i18n("无法识别该播客 ID") };
+      }
+      const subscribe = actionId === ITEM_ACTION_IDS.subPodcast;
+      await togglePodcastSubscribe(radioId, subscribe, config);
+      updateCachedFavoriteId(cookieKey, "podcasts", radioId, subscribe);
+      return {
+        message: Widget.i18n(subscribe ? "已订阅播客" : "已取消订阅播客"),
+        refresh: true,
+      };
+    }
+    default:
+      return { message: Widget.i18n("不支持的操作") };
+  }
+}
+
 export async function handleDetail(link: string): Promise<VideoItem> {
   const parsed = parseDetailLink(link);
   if (!parsed) {
@@ -2080,19 +2473,19 @@ export async function handleDetail(link: string): Promise<VideoItem> {
   }
   const config = getRuntimeConfig();
 
+  let detail: VideoItem;
   if (parsed.kind === "song") {
-    return loadSongDetail(parsed.id, config);
+    detail = await loadSongDetail(parsed.id, config);
+  } else if (parsed.kind === "album") {
+    detail = await loadAlbumDetail(parsed.id, config);
+  } else if (parsed.kind === "dj") {
+    detail = await loadPodcastDetail(parsed.id, config);
+  } else if (parsed.kind === "hot") {
+    detail = await loadHotSearchDetail(parsed.keyword, config);
+  } else {
+    detail = await loadPlaylistDetail(parsed.id, config);
   }
-  if (parsed.kind === "album") {
-    return loadAlbumDetail(parsed.id, config);
-  }
-  if (parsed.kind === "dj") {
-    return loadPodcastDetail(parsed.id, config);
-  }
-  if (parsed.kind === "hot") {
-    return loadHotSearchDetail(parsed.keyword, config);
-  }
-  return loadPlaylistDetail(parsed.id, config);
+  return attachFavoriteActionsToDetail(detail, config);
 }
 
 function resolveSongIdFromSubtitleParams(params: { id?: string; link?: string }): string {

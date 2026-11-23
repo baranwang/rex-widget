@@ -8,6 +8,7 @@ import {
   EAPI_UA,
   formatCoverUrl,
   isFlacQuality,
+  NCM_CHECK_TOKEN,
   NCM_CLIENTLOG_HOST,
   NCM_EAPI_HOST,
   NCM_SITE,
@@ -208,6 +209,7 @@ export async function eapiRequest<T extends JsonRecord = JsonRecord>(
     timeout?: number;
     clientProfile?: "pc" | "android" | "osx";
     host?: string;
+    checkToken?: boolean;
   } = {},
 ): Promise<T> {
   const cookies = buildMergedCookies(config);
@@ -230,6 +232,9 @@ export async function eapiRequest<T extends JsonRecord = JsonRecord>(
     requestId: `${now}_${String(Math.floor(Math.random() * 1000)).padStart(4, "0")}`,
     __csrf: cookies.__csrf || "",
   };
+  if (options.checkToken) {
+    header["X-antiCheatToken"] = NCM_CHECK_TOKEN;
+  }
   if (cookies.MUSIC_U) {
     header.MUSIC_U = cookies.MUSIC_U;
   }
@@ -596,4 +601,132 @@ export async function fetchArtistAvatarsBatch(
   }
 
   return result;
+}
+
+function extractNumericIds(list: unknown[] | undefined, getId: (item: unknown) => unknown): string[] {
+  if (!Array.isArray(list)) {
+    return [];
+  }
+  const out: string[] = [];
+  for (const item of list) {
+    const raw = getId(item);
+    const id = raw !== undefined && raw !== null ? String(raw) : "";
+    if (/^\d+$/.test(id)) {
+      out.push(id);
+    }
+  }
+  return out;
+}
+
+export async function fetchLikedSongIds(config: RuntimeConfig): Promise<string[]> {
+  const { uid } = await resolveAccountUid(config);
+  const response = await eapiRequest<{ ids?: Array<number | string> }>("/api/song/like/get", { uid }, config, {
+    timeout: 5,
+  });
+  return extractNumericIds(response.ids, (id) => id);
+}
+
+export async function fetchUserPlaylistOwnership(
+  config: RuntimeConfig,
+): Promise<{ subscribed: string[]; owned: string[] }> {
+  const { uid } = await resolveAccountUid(config);
+  const response = await webRequest<{
+    playlist?: Array<{ id?: number | string; subscribed?: boolean; userId?: number | string }>;
+  }>("/api/user/playlist", { uid, limit: 200, offset: 0, includeVideo: true }, config, { timeout: 5 });
+  const subscribed: string[] = [];
+  const owned: string[] = [];
+  for (const pl of Array.isArray(response.playlist) ? response.playlist : []) {
+    const id = pl?.id !== undefined ? String(pl.id) : "";
+    if (!/^\d+$/.test(id)) {
+      continue;
+    }
+    if (pl.subscribed === true) {
+      subscribed.push(id);
+    } else if (pl.userId !== undefined && String(pl.userId) === uid) {
+      owned.push(id);
+    }
+  }
+  return { subscribed, owned };
+}
+
+export async function fetchSubscribedAlbumIds(config: RuntimeConfig): Promise<string[]> {
+  const response = await eapiRequest<{ data?: Array<{ id?: number | string }> }>(
+    "/api/album/sublist",
+    { limit: 100, offset: 0, total: true },
+    config,
+    { timeout: 5 },
+  );
+  return extractNumericIds(response.data, (item) => (item as { id?: number | string })?.id);
+}
+
+export async function fetchSubscribedArtistIds(config: RuntimeConfig): Promise<string[]> {
+  const response = await eapiRequest<{ data?: Array<{ id?: number | string }> }>(
+    "/api/artist/sublist",
+    { limit: 100, offset: 0, total: true },
+    config,
+    { timeout: 5 },
+  );
+  return extractNumericIds(response.data, (item) => (item as { id?: number | string })?.id);
+}
+
+export async function fetchSubscribedPodcastIds(config: RuntimeConfig): Promise<string[]> {
+  const response = await eapiRequest<{ djRadios?: Array<{ id?: number | string }> }>(
+    "/api/djradio/get/subed",
+    { limit: 100, offset: 0, total: true },
+    config,
+    { timeout: 5 },
+  );
+  return extractNumericIds(response.djRadios, (item) => (item as { id?: number | string })?.id);
+}
+
+export async function toggleSongLike(songId: string, like: boolean, config: RuntimeConfig): Promise<void> {
+  await eapiRequest(
+    "/api/radio/like",
+    {
+      alg: "itembased",
+      trackId: songId,
+      like,
+      time: "3",
+    },
+    config,
+    { clientProfile: "osx", timeout: 10 },
+  );
+}
+
+export async function togglePlaylistSubscribe(
+  playlistId: string,
+  subscribe: boolean,
+  config: RuntimeConfig,
+): Promise<void> {
+  await eapiRequest(
+    subscribe ? "/api/playlist/subscribe" : "/api/playlist/unsubscribe",
+    subscribe ? { id: playlistId, checkToken: NCM_CHECK_TOKEN } : { id: playlistId },
+    config,
+    { checkToken: true, timeout: 10 },
+  );
+}
+
+export async function toggleAlbumSubscribe(albumId: string, subscribe: boolean, config: RuntimeConfig): Promise<void> {
+  await eapiRequest(subscribe ? "/api/album/sub" : "/api/album/unsub", { id: albumId }, config, { timeout: 10 });
+}
+
+export async function toggleArtistSubscribe(
+  artistId: string,
+  subscribe: boolean,
+  config: RuntimeConfig,
+): Promise<void> {
+  await eapiRequest(
+    subscribe ? "/api/artist/sub" : "/api/artist/unsub",
+    { artistId, artistIds: `[${artistId}]` },
+    config,
+    { timeout: 10 },
+  );
+}
+
+export async function togglePodcastSubscribe(
+  radioId: string,
+  subscribe: boolean,
+  config: RuntimeConfig,
+): Promise<void> {
+  await eapiRequest(subscribe ? "/api/djradio/sub" : "/api/djradio/unsub", { id: radioId }, config, { timeout: 10 });
 }

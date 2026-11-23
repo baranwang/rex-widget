@@ -2,6 +2,7 @@ import type { ManagedCookieName, SetCookieUpdate } from "./auth";
 import {
   ACCOUNT_CACHE_TTL_MS,
   ARTIST_AVATAR_CACHE_TTL_MS,
+  FAVORITES_CACHE_TTL_MS,
   GENRE_COVER_CACHE_TTL_MS,
   type PlayerTypePreference,
   QUALITY_LEVELS,
@@ -18,6 +19,7 @@ const KEYS = {
   songMeta: "ncm:songMeta",
   genreCovers: "ncm:genreCovers",
   artistAvatars: "ncm:artistAvatars",
+  favorites: "ncm:favorites",
 } as const;
 
 const MAX_STREAM_ENTRIES = 50;
@@ -153,6 +155,7 @@ export function syncRuntimeConfig(params?: {
   if (next.cookie !== prev.cookie) {
     removeStorage(KEYS.account);
     removeStorage(KEYS.streams);
+    removeStorage(KEYS.favorites);
   }
   writeStorage(KEYS.config, next);
   return next;
@@ -394,4 +397,94 @@ export function cacheArtistAvatars(avatars: Record<string, string>, now = Date.n
     }
   }
   writeStorage(KEYS.artistAvatars, map);
+}
+
+export type FavoriteBucket = "songs" | "playlists" | "ownedPlaylists" | "albums" | "artists" | "podcasts";
+
+interface FavoriteBucketEntry {
+  ids: string[];
+  cachedAt: number;
+}
+
+interface CachedFavoritesStore {
+  cookieKey: string;
+  buckets: Partial<Record<FavoriteBucket, FavoriteBucketEntry>>;
+}
+
+function readFavoritesStore(cookieKey: string): CachedFavoritesStore {
+  if (!cookieKey) {
+    return { cookieKey: "", buckets: {} };
+  }
+  const stored = readStorage<CachedFavoritesStore>(KEYS.favorites);
+  if (!stored || typeof stored !== "object" || stored.cookieKey !== cookieKey || !stored.buckets) {
+    return { cookieKey, buckets: {} };
+  }
+  return { cookieKey, buckets: { ...stored.buckets } };
+}
+
+export function getCachedFavoriteIds(cookieKey: string, bucket: FavoriteBucket, now = Date.now()): Set<string> | null {
+  if (!cookieKey) {
+    return null;
+  }
+  const store = readFavoritesStore(cookieKey);
+  const entry = store.buckets[bucket];
+  if (!entry || !Array.isArray(entry.ids) || typeof entry.cachedAt !== "number") {
+    return null;
+  }
+  if (now - entry.cachedAt > FAVORITES_CACHE_TTL_MS) {
+    return null;
+  }
+  return new Set(entry.ids.filter((id) => typeof id === "string" && id.length > 0));
+}
+
+export function setCachedFavoriteIds(
+  cookieKey: string,
+  bucket: FavoriteBucket,
+  ids: Iterable<string>,
+  now = Date.now(),
+): void {
+  if (!cookieKey) {
+    return;
+  }
+  const store = readFavoritesStore(cookieKey);
+  const normalized = Array.from(new Set(Array.from(ids).filter((id) => Boolean(id))));
+  store.buckets[bucket] = { ids: normalized, cachedAt: now };
+  writeStorage(KEYS.favorites, store);
+}
+
+export function mergeCachedFavoriteIds(
+  cookieKey: string,
+  bucket: FavoriteBucket,
+  ids: Iterable<string>,
+  now = Date.now(),
+): void {
+  if (!cookieKey) {
+    return;
+  }
+  const existing = getCachedFavoriteIds(cookieKey, bucket, now) ?? new Set<string>();
+  for (const id of ids) {
+    if (id) {
+      existing.add(id);
+    }
+  }
+  setCachedFavoriteIds(cookieKey, bucket, existing, now);
+}
+
+export function updateCachedFavoriteId(
+  cookieKey: string,
+  bucket: FavoriteBucket,
+  id: string,
+  saved: boolean,
+  now = Date.now(),
+): void {
+  if (!cookieKey || !id) {
+    return;
+  }
+  const existing = getCachedFavoriteIds(cookieKey, bucket, now) ?? new Set<string>();
+  if (saved) {
+    existing.add(id);
+  } else {
+    existing.delete(id);
+  }
+  setCachedFavoriteIds(cookieKey, bucket, existing, now);
 }

@@ -12,6 +12,7 @@ import {
   handleRadios,
   handleSearch,
   handleSubtitle,
+  handleToggleFavorite,
 } from "./service";
 
 const widgetVersion = (() => {
@@ -506,3 +507,5 @@ loadSubtitle = async (params) => handleSubtitle(params);
 search = async (params) => handleSearch(params);
 
 loadDetail = async (link) => handleDetail(link);
+
+toggleFavorite = async (params) => handleToggleFavorite(params);

@@ -241,10 +241,10 @@ importers:
     devDependencies:
       '@rexnow/libs':
         specifier: ^3.2.1
-        version: 3.2.1
+        version: 3.3.0
       '@rexnow/rslib-plugin':
         specifier: ^3.2.1
-        version: 3.2.1
+        version: 3.3.0
       '@rexnow/tmdb-mapping-kit':
         specifier: workspace:^
         version: link:../../packages/tmdb-mapping-kit
@@ -280,10 +280,10 @@ importers:
     devDependencies:
       '@rexnow/libs':
         specifier: ^3.2.1
-        version: 3.2.1
+        version: 3.3.0
       '@rexnow/rslib-plugin':
         specifier: ^3.2.1
-        version: 3.2.1
+        version: 3.3.0
       '@rslib/core':
         specifier: ^1.0.7
         version: 1.0.7(core-js@3.47.0)(typescript@7.0.2)
@@ -300,11 +300,11 @@ importers:
   apps/netease-music:
     devDependencies:
       '@rexnow/libs':
-        specifier: ^3.2.1
-        version: 3.2.1
+        specifier: ^3.3.0
+        version: 3.3.0
       '@rexnow/rslib-plugin':
-        specifier: ^3.2.1
-        version: 3.2.1
+        specifier: ^3.3.0
+        version: 3.3.0
       '@rslib/core':
         specifier: ^1.0.7
         version: 1.0.7(core-js@3.47.0)(typescript@7.0.2)
@@ -322,10 +322,10 @@ importers:
     devDependencies:
       '@rexnow/libs':
         specifier: ^3.2.1
-        version: 3.2.1
+        version: 3.3.0
       '@rexnow/rslib-plugin':
         specifier: ^3.2.1
-        version: 3.2.1
+        version: 3.3.0
       '@rslib/core':
         specifier: ^1.0.7
         version: 1.0.7(core-js@3.47.0)(typescript@7.0.2)
@@ -353,7 +353,7 @@ importers:
     devDependencies:
       '@rexnow/libs':
         specifier: ^3.2.1
-        version: 3.2.1
+        version: 3.3.0
       '@rslib/core':
         specifier: ^1.0.7
         version: 1.0.7(core-js@3.47.0)(typescript@7.0.2)
@@ -439,7 +439,7 @@ importers:
     devDependencies:
       '@rexnow/libs':
         specifier: ^3.2.1
-        version: 3.2.1
+        version: 3.3.0
       '@rslib/core':
         specifier: ^1.0.7
         version: 1.0.7(core-js@3.47.0)(typescript@7.0.2)
@@ -1178,11 +1178,11 @@ packages:
   '@protobufjs/utf8@1.1.2':
     resolution: {integrity: sha512-b1UQwcEZ4yCnMCD8DAL1VlbvBJE9/IX4FTIp7BG1xYpf29SLazLSrqUkj4w7Y5y7cCVP6E5tcqqcI0xemPkHug==}
 
-  '@rexnow/libs@3.2.1':
-    resolution: {integrity: sha512-wXbaM7VDAiBxtTs34awsY1IaB6lEM2S+BYZiXKgrveL3imNIsHrAGmR8+FYf2VFKfQIFzz1Uw/962V/ohGAV3A==}
+  '@rexnow/libs@3.3.0':
+    resolution: {integrity: sha512-GQMpvq7ZOWukbDdHdicpiUShiA+17l4/h7KFDPxXzYs+RuXtx7Ixk94zX6FNlT7jq4si7D2XGSGBp88HYeITzQ==}
 
-  '@rexnow/rslib-plugin@3.2.1':
-    resolution: {integrity: sha512-M9i3VGBZ5txgXFfeCrBTQexO7l9YSpxcZh/CDtfvCx/xPGHVDK79O2OlXQ4xiAG7bPcGL/JL4BmrnEUHvcXcVg==}
+  '@rexnow/rslib-plugin@3.3.0':
+    resolution: {integrity: sha512-F3gKFVGom/mCH4wGGh7ft2I8+GI2Gqk4ydaEKHrsqGcu+sCnL4+a3BZjP9hzyokMFBcN2O93lfumPbzR/6wv3A==}
 
   '@rsbuild/core@2.3.3':
     resolution: {integrity: sha512-IdbBXZrIY16RxnQduXRrsRBQtJ/X7JkYESrk6D46WA918wrckYTBxE09vHvDxR+3JoCLE02vOm2NPBNxqaUw5A==}
@@ -3418,11 +3418,11 @@ snapshots:
 
   '@protobufjs/utf8@1.1.2': {}
 
-  '@rexnow/libs@3.2.1':
+  '@rexnow/libs@3.3.0':
     dependencies:
       cheerio: 1.2.0
 
-  '@rexnow/rslib-plugin@3.2.1':
+  '@rexnow/rslib-plugin@3.3.0':
     dependencies:
       '@hono/node-server': 2.1.1(hono@4.13.7)
       es-toolkit: 1.53.2

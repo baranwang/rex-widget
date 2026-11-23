@@ -1,6 +1,6 @@
 import { createDecipheriv } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, rs, test } from "@rstest/core";
-import { EAPI_KEY, EAPI_OSX_UA, NCM_CLIENTLOG_HOST } from "./constants";
+import { EAPI_KEY, EAPI_OSX_UA, NCM_CHECK_TOKEN, NCM_CLIENTLOG_HOST } from "./constants";
 import {
   handleArtists,
   handleBanners,
@@ -14,6 +14,7 @@ import {
   handleRadios,
   handleSearch,
   handleSubtitle,
+  handleToggleFavorite,
 } from "./service";
 
 function decodeEapiParams(body: unknown): { path: string; payload: Record<string, unknown> } {
@@ -1079,6 +1080,163 @@ describe("netease-music service", () => {
       title: "焦点歌单",
       backdropPath: "https://p1.music.126.net/banner_pl.jpg",
       posterPath: "https://p3.music.126.net/pl_sq.jpg?param=500y500",
+    });
+    expect(items[0]?.actions).toBeUndefined();
+  });
+
+  test("attaches Rex 0.0.9 like/subscribe item actions when logged in and flips menu titles after toggleFavorite", async () => {
+    const cookie = "MUSIC_U=favorites_cookie_token_12345678901234567890";
+    let likeListFetches = 0;
+    const calls: Array<{ url: string; ua: string; payload: Record<string, unknown> }> = [];
+
+    stubHttp((opts) => {
+      if (opts.url.includes("/api/nuser/account/get")) {
+        return { data: { code: 200, account: { id: 888 }, profile: { nickname: "测试用户" } } };
+      }
+      if (opts.url.includes("/api/v3/discovery/recommend/songs")) {
+        return {
+          data: {
+            code: 200,
+            data: {
+              dailySongs: [
+                { id: 101, name: "已红心歌曲", dt: 200000, ar: [{ id: 1, name: "歌手A" }] },
+                { id: 102, name: "未红心歌曲", dt: 210000, ar: [{ id: 2, name: "歌手B" }] },
+              ],
+            },
+          },
+        };
+      }
+      if (opts.url.includes("/eapi/song/like/get")) {
+        likeListFetches += 1;
+        return { data: { code: 200, ids: [101] } };
+      }
+      if (opts.url.includes("/eapi/radio/like")) {
+        const decoded = decodeEapiParams(opts.data);
+        calls.push({ url: opts.url, ua: opts.headers?.["user-agent"] || "", payload: decoded.payload });
+        return { data: { code: 200 } };
+      }
+      if (opts.url.includes("/eapi/playlist/subscribe") || opts.url.includes("/eapi/playlist/unsubscribe")) {
+        const decoded = decodeEapiParams(opts.data);
+        calls.push({ url: opts.url, ua: opts.headers?.["user-agent"] || "", payload: decoded.payload });
+        return { data: { code: 200 } };
+      }
+      if (opts.url.includes("/eapi/album/sub") || opts.url.includes("/eapi/album/unsub")) {
+        const decoded = decodeEapiParams(opts.data);
+        calls.push({ url: opts.url, ua: opts.headers?.["user-agent"] || "", payload: decoded.payload });
+        return { data: { code: 200 } };
+      }
+      if (opts.url.includes("/eapi/artist/sub") || opts.url.includes("/eapi/artist/unsub")) {
+        const decoded = decodeEapiParams(opts.data);
+        calls.push({ url: opts.url, ua: opts.headers?.["user-agent"] || "", payload: decoded.payload });
+        return { data: { code: 200 } };
+      }
+      if (opts.url.includes("/eapi/djradio/sub") || opts.url.includes("/eapi/djradio/unsub")) {
+        const decoded = decodeEapiParams(opts.data);
+        calls.push({ url: opts.url, ua: opts.headers?.["user-agent"] || "", payload: decoded.payload });
+        return { data: { code: 200 } };
+      }
+      if (opts.url.includes("/api/user/playlist")) {
+        return {
+          data: {
+            code: 200,
+            playlist: [
+              { id: 9001, name: "我创建的歌单", userId: 888, subscribed: false },
+              { id: 9002, name: "已收藏的歌单", userId: 777, subscribed: true },
+            ],
+          },
+        };
+      }
+      if (opts.url.includes("/api/v6/playlist/detail")) {
+        return {
+          data: {
+            code: 200,
+            playlist: {
+              id: 9003,
+              name: "外部歌单",
+              tracks: [{ id: 102, name: "未红心歌曲", dt: 210000, ar: [] }],
+              trackIds: [{ id: 102 }],
+            },
+          },
+        };
+      }
+      if (opts.url.includes("/eapi/playlist/detail/rcmd/get")) {
+        return { data: { code: 200, data: { recPlaylist: [] } } };
+      }
+      throw new Error(`Unexpected URL: ${opts.url}`);
+    });
+
+    // 1. Initial load hydrates liked song IDs and sets accurate menu titles
+    const songs = await handleHome({ cookie, filter: "daily", page: "1" });
+    expect(likeListFetches).toBe(1);
+    expect(songs[0]?.actions).toEqual([{ id: "unlike_song", title: "取消红心", functionName: "toggleFavorite" }]);
+    expect(songs[1]?.actions).toEqual([{ id: "like_song", title: "红心喜欢", functionName: "toggleFavorite" }]);
+
+    // 2. Like song 102 via toggleFavorite (uses osx profile to avoid -460)
+    const likeRes = await handleToggleFavorite({ cookie, actionId: "like_song", itemId: "102" });
+    expect(likeRes).toEqual({ message: "已加入我喜欢的音乐", refresh: true });
+    expect(calls[0]?.url).toContain("/eapi/radio/like");
+    expect(calls[0]?.ua).toBe(EAPI_OSX_UA);
+    expect(calls[0]?.payload).toMatchObject({ trackId: "102", like: true, header: { os: "osx" } });
+
+    // 3. Refresh list uses updated cache without re-fetching /eapi/song/like/get
+    const songsAfterLike = await handleHome({ cookie, filter: "daily", page: "1" });
+    expect(likeListFetches).toBe(1);
+    expect(songsAfterLike[1]?.actions).toEqual([
+      { id: "unlike_song", title: "取消红心", functionName: "toggleFavorite" },
+    ]);
+
+    // 4. Unlike song 101
+    const unlikeRes = await handleToggleFavorite({ cookie, actionId: "unlike_song", itemId: "101" });
+    expect(unlikeRes).toEqual({ message: "已取消红心喜欢", refresh: true });
+    expect(calls[1]?.payload).toMatchObject({ trackId: "101", like: false });
+
+    // 5. Playlist subscribe sends checkToken + X-antiCheatToken; owned playlists have no subscribe action
+    const playlists = await handleLibrary({ cookie, tab: "playlists", page: "1" });
+    expect(playlists[0]?.actions).toBeUndefined();
+    expect(playlists[1]?.actions).toEqual([
+      { id: "unsub_playlist", title: "取消收藏", functionName: "toggleFavorite" },
+    ]);
+
+    const plDetail = await handleDetail("ncm:playlist:9003");
+    expect(plDetail.actions).toEqual([{ id: "sub_playlist", title: "收藏歌单", functionName: "toggleFavorite" }]);
+    expect(plDetail.tracks?.[0]?.actions).toEqual([
+      { id: "unlike_song", title: "取消红心", functionName: "toggleFavorite" },
+    ]);
+
+    const subPlRes = await handleToggleFavorite({ cookie, actionId: "sub_playlist", itemId: "9003" });
+    expect(subPlRes).toEqual({ message: "已收藏歌单", refresh: true });
+    expect(calls[2]?.url).toContain("/eapi/playlist/subscribe");
+    expect(calls[2]?.payload).toMatchObject({
+      id: "9003",
+      checkToken: NCM_CHECK_TOKEN,
+      header: { "X-antiCheatToken": NCM_CHECK_TOKEN },
+    });
+
+    // 6. Album, artist, and podcast (dj: prefix) subscribe/unsubscribe
+    expect(await handleToggleFavorite({ cookie, actionId: "sub_album", itemId: "34930257" })).toEqual({
+      message: "已收藏专辑",
+      refresh: true,
+    });
+    expect(calls[3]?.url).toContain("/eapi/album/sub");
+    expect(calls[3]?.payload).toMatchObject({ id: "34930257" });
+
+    expect(await handleToggleFavorite({ cookie, actionId: "unsub_artist", itemId: "6731" })).toEqual({
+      message: "已取消关注歌手",
+      refresh: true,
+    });
+    expect(calls[4]?.url).toContain("/eapi/artist/unsub");
+    expect(calls[4]?.payload).toMatchObject({ artistId: "6731", artistIds: "[6731]" });
+
+    expect(await handleToggleFavorite({ cookie, actionId: "sub_podcast", itemId: "dj:348085051" })).toEqual({
+      message: "已订阅播客",
+      refresh: true,
+    });
+    expect(calls[5]?.url).toContain("/eapi/djradio/sub");
+    expect(calls[5]?.payload).toMatchObject({ id: "348085051" });
+
+    // 7. Missing Cookie returns helpful message without failing
+    expect(await handleToggleFavorite({ cookie: "", actionId: "like_song", itemId: "102" })).toEqual({
+      message: "请在模块设置中填写包含 MUSIC_U 的网易云音乐 Cookie 后操作",
     });
   });
 });
