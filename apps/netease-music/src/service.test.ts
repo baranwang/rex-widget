@@ -1,4 +1,6 @@
+import { createDecipheriv } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, rs, test } from "@rstest/core";
+import { EAPI_KEY, EAPI_OSX_UA, NCM_CLIENTLOG_HOST } from "./constants";
 import {
   handleArtists,
   handleBanners,
@@ -13,6 +15,14 @@ import {
   handleSearch,
   handleSubtitle,
 } from "./service";
+
+function decodeEapiParams(body: unknown): { path: string; payload: Record<string, unknown> } {
+  const raw = typeof body === "string" ? body.replace(/^params=/, "") : "";
+  const decipher = createDecipheriv("aes-128-ecb", Buffer.from(EAPI_KEY, "utf8"), null);
+  const decrypted = Buffer.concat([decipher.update(Buffer.from(raw, "hex")), decipher.final()]).toString("utf8");
+  const [path, jsonText] = decrypted.split("-36cd479b6b5-");
+  return { path, payload: JSON.parse(jsonText) as Record<string, unknown> };
+}
 
 type MockResponse = {
   data: unknown;
@@ -694,7 +704,12 @@ describe("netease-music service", () => {
   });
 
   test("handleDetail enriches song with vivid Android UA, dynamic cover, MV trailer, related songs, and scrobble", async () => {
-    let scrobbleCalled = false;
+    const scrobbleCalls: Array<{
+      url: string;
+      userAgent: string;
+      header: Record<string, unknown>;
+      logs: Array<{ action: string; json: Record<string, unknown> }>;
+    }> = [];
     let vividUserAgent = "";
     stubHttp((opts) => {
       if (opts.url.includes("/eapi/song/enhance/player/url/v1")) {
@@ -733,8 +748,17 @@ describe("netease-music service", () => {
         return { data: { code: 200, data: { url: "http://vod.music.126.net/mv.mp4" } } };
       }
       if (opts.url.includes("/eapi/feedback/weblog")) {
-        scrobbleCalled = true;
-        return { data: { code: 200 } };
+        const decoded = decodeEapiParams(opts.data);
+        scrobbleCalls.push({
+          url: opts.url,
+          userAgent: opts.headers?.["user-agent"] || "",
+          header: (decoded.payload.header ?? {}) as Record<string, unknown>,
+          logs: JSON.parse(String(decoded.payload.logs || "[]")) as Array<{
+            action: string;
+            json: Record<string, unknown>;
+          }>,
+        });
+        return { data: { code: 200, data: "success" } };
       }
       throw new Error(`Unexpected URL: ${opts.url}`);
     });
@@ -749,7 +773,43 @@ describe("netease-music service", () => {
     expect(detail.albumMotionArtwork).toBe("https://vod.music.126.net/motion.mp4");
     expect(detail.trailers?.[0]?.videoUrl).toBe("https://vod.music.126.net/mv.mp4");
     expect(detail.relatedItems?.[0]).toMatchObject({ id: "421563096", title: "我们的时光" });
-    expect(scrobbleCalled).toBe(true);
+
+    expect(scrobbleCalls).toHaveLength(2);
+    for (const call of scrobbleCalls) {
+      expect(call.url).toBe(`${NCM_CLIENTLOG_HOST}/eapi/feedback/weblog`);
+      expect(call.userAgent).toBe(EAPI_OSX_UA);
+      expect(call.header).toMatchObject({ os: "osx", appver: "3.1.10.5100" });
+    }
+    expect(scrobbleCalls[0]?.logs).toEqual([
+      {
+        action: "startplay",
+        json: {
+          id: "436514312",
+          type: "song",
+          mainsite: "1",
+          mainsiteWeb: "1",
+          content: "id=0",
+        },
+      },
+    ]);
+    expect(scrobbleCalls[1]?.logs).toEqual([
+      {
+        action: "play",
+        json: {
+          id: "436514312",
+          type: "song",
+          mainsite: "1",
+          mainsiteWeb: "1",
+          content: "id=0",
+          download: 0,
+          end: "playend",
+          sourceId: "0",
+          time: 328,
+          wifi: 0,
+          source: "list",
+        },
+      },
+    ]);
   });
 
   test("handleDetail enriches playlist with genreItems and related playlists", async () => {
