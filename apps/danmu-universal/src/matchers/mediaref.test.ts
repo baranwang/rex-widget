@@ -1,4 +1,3 @@
-import { LOCAL_TMDB_PLATFORM_MAP } from "@rexnow/tmdb-mapping-kit/local-map";
 import { afterEach, beforeEach, describe, expect, rs, test } from "@rstest/core";
 import "../index";
 import { initializeFetchAdapter } from "../libs/fetch";
@@ -213,12 +212,7 @@ describe("searchDanmu 接入 MediaRef", () => {
     episodeNumber: 15,
   };
 
-  beforeEach(() => {
-    LOCAL_TMDB_PLATFORM_MAP.movie = {};
-    LOCAL_TMDB_PLATFORM_MAP.tv = {};
-  });
-
-  test("MediaRef 命中就直接返回，不再走本地 matcher", async () => {
+  test("MediaRef 命中就直接返回，不再走豆瓣", async () => {
     mockPost().mockResolvedValueOnce(
       mediaRefResponse("tv", [
         {
@@ -251,11 +245,12 @@ describe("searchDanmu 接入 MediaRef", () => {
   test.each([
     ["未映射", () => mockPost().mockResolvedValueOnce(mediaRefResponse("tv", []) as never)],
     ["报错", () => mockPost().mockRejectedValueOnce(new Error("HTTP 503"))],
-  ])("MediaRef %s时退回本地映射表", async (_, arrange) => {
+  ])("MediaRef %s时退回豆瓣", async (_, arrange) => {
     arrange();
-    LOCAL_TMDB_PLATFORM_MAP.tv = {
-      "201": [{ season: 1, provider: "tencent", idString: "cid=mzc00200mp8vo9b", epOffset: 0 }],
-    };
+    rs.spyOn(DoubanMatcher.prototype, "getEpisodeParams").mockResolvedValueOnce({
+      doubanIds: [],
+      videoPlatformInfo: [{ provider: "tencent", idString: "cid=mzc00200mp8vo9b" }],
+    });
     const getEpisodes = rs.spyOn(scraper, "getEpisodes").mockResolvedValueOnce([tencentEpisode]);
 
     const result = await searchDanmu({
@@ -263,6 +258,7 @@ describe("searchDanmu 接入 MediaRef", () => {
       tmdbId: "201",
       season: "1",
       episode: "15",
+      fuzzyMatch: "never",
       "global.mediaRef.apiKey": "user-key",
     } as SearchDanmuParams);
 

@@ -3,7 +3,6 @@ import { DoubanHistory } from "./experimental/douban-history";
 import { EMPTY_ANIME_CONFIG, type MediaType, PROVIDER_NAMES } from "./libs/constants";
 import { z } from "./libs/zod";
 import { DoubanMatcher } from "./matchers/douban";
-import { getLocalEpisodeParams } from "./matchers/local";
 import { getMediaRefEpisodeParams } from "./matchers/mediaref";
 import { type GetEpisodeParam, scraper } from "./scrapers";
 
@@ -312,15 +311,6 @@ searchDanmu = async (params) => {
   const tmdbId = params.tmdbId ? Number(params.tmdbId) : NaN;
   const isMovieOrTv = mediaType === "tv" || mediaType === "movie";
   const season = mediaType === "tv" && params.season !== undefined ? Number(params.season) : null;
-  const localEpisodeParams =
-    isMovieOrTv && Number.isInteger(tmdbId)
-      ? getLocalEpisodeParams({
-          type: mediaType,
-          tmdbId,
-          season,
-          episode: episode === undefined ? undefined : Number(episode),
-        })
-      : [];
   if (isMovieOrTv && Number.isInteger(tmdbId)) {
     const mediaRefEpisodeParams = await getMediaRefEpisodeParams({
       apiKey: globalParams?.global.mediaRef.apiKey ?? "",
@@ -334,11 +324,6 @@ searchDanmu = async (params) => {
       const mediaRefEpisodes = await getMatchedEpisodes(mediaRefEpisodeParams, false);
       if (mediaRefEpisodes.length) return toSearchResult(mediaRefEpisodes);
     }
-  }
-  if (localEpisodeParams.length) {
-    console.log("Found local episode params", localEpisodeParams);
-    const localEpisodes = await getMatchedEpisodes(localEpisodeParams, false);
-    if (localEpisodes.length) return toSearchResult(localEpisodes);
   }
 
   let episodesParams: GetEpisodeParam[] = [];

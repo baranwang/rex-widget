@@ -34,7 +34,6 @@
   "devDependencies": {
     "@rexnow/libs": "^3.2.1",
     "@rexnow/rslib-plugin": "^3.2.1",
-    "@rexnow/tmdb-mapping-kit": "workspace:^",
     "@rsdoctor/rspack-plugin": "^1.6.5",
     "@rslib/core": "^1.0.7",
     "@rstest/core": "^0.12.6",
