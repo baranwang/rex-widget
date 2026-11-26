@@ -365,6 +365,7 @@ searchDanmu = async (params) => {
       type: mediaType,
       tmdbId,
       season,
+      episode: episode === undefined ? undefined : Number(episode),
       doubanId: tmdbMatch.doubanId,
       platforms: tmdbMatch.videoPlatformInfo,
       episodes,
