@@ -1,4 +1,4 @@
-import { merge, omit } from "es-toolkit";
+import { merge } from "es-toolkit";
 import { stringify as qsStringify } from "querystringify";
 import { z } from "zod";
 
@@ -42,6 +42,23 @@ export interface RequestOptions<T extends z.ZodType | undefined = undefined> ext
   schema?: T;
 }
 
+const SENSITIVE_HEADERS = new Set(["x-api-key", "authorization", "cookie"]);
+
+/** 日志里遮掉密钥类请求头。 */
+const redactOptions = (options: RequestOptions) => {
+  const { schema: _schema, successStatus: _successStatus, ...rest } = options;
+  if (!rest.headers) return rest;
+  return {
+    ...rest,
+    headers: Object.fromEntries(
+      Object.entries(rest.headers).map(([key, value]) => [
+        key,
+        SENSITIVE_HEADERS.has(key.toLowerCase()) ? "[redacted]" : value,
+      ]),
+    ),
+  };
+};
+
 // 请求上下文信息
 interface RequestContext {
   url: string;
@@ -63,7 +80,7 @@ class HttpStatusError extends Error {
 
     console.error(`🚫 HTTP Request Failed: ${context.method} ${context.url}`, "Status", statusCode);
     if (context.body) console.error("Request Body:", JSON.stringify(context.body));
-    if (context.options) console.error("Request Options:", omit(context.options, ["schema", "successStatus"]));
+    if (context.options) console.error("Request Options:", redactOptions(context.options));
     console.error("Response:", { headers: response.headers, data: response.data });
   }
 }
@@ -80,7 +97,7 @@ class HttpSchemaError extends Error {
     console.error(
       `🚫 HTTP Request Failed Failed to parse response with schema: ${z.prettifyError(error)}: ${context.method} ${context.url}`,
     );
-    if (context.options) console.error("Request Options:", omit(context.options, ["schema", "successStatus"]));
+    if (context.options) console.error("Request Options:", redactOptions(context.options));
     console.error("Response:", { headers: response.headers, data: response.data });
   }
 }
@@ -231,7 +248,7 @@ export class Fetch {
       finalUrl = `${url}?${qsStringify(params)}`;
     }
 
-    console.debug("⬆️ fetch", finalUrl, body ?? "", restOptions);
+    console.debug("⬆️ fetch", finalUrl, body ?? "", redactOptions(restOptions));
     const adapter = this.adapter ?? Fetch.getAdapter();
     return isGet ? adapter.get<T>(finalUrl, restOptions) : adapter.post<T>(finalUrl, body, restOptions);
   }

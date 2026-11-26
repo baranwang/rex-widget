@@ -107,7 +107,7 @@ export const getMediaRefEpisodeParams = async ({
       return [];
     });
   } catch (error) {
-    console.error("MediaRef lookup failed", error);
+    console.error("MediaRef lookup failed", error instanceof Error ? error.message : error);
     return [];
   }
 };
@@ -212,7 +212,7 @@ export const reportMediaRefLeads = async ({
           },
         );
       } catch (error) {
-        console.error("MediaRef lead report failed", lead, error);
+        console.error("MediaRef lead report failed", lead, error instanceof Error ? error.message : error);
       }
     }),
   );

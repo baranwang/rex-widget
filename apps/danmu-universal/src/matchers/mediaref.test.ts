@@ -400,3 +400,33 @@ describe("searchDanmu 上报线索", () => {
     expect(leadBodies(post)).toEqual([]);
   });
 });
+
+describe("日志不泄露 API key", () => {
+  test("请求日志、报错日志和 searchDanmu 参数日志都遮掉 key", async () => {
+    const secret = "mref_secret_should_not_leak";
+    const logged: unknown[] = [];
+    for (const level of ["log", "debug", "error", "info"] as const) {
+      rs.spyOn(console, level).mockImplementation((...args: unknown[]) => {
+        logged.push(...args);
+      });
+    }
+    mockPost().mockResolvedValueOnce({ data: {}, statusCode: 401, headers: {} } as never);
+    rs.spyOn(DoubanMatcher.prototype, "getEpisodeParams").mockResolvedValueOnce({
+      doubanIds: [],
+      videoPlatformInfo: [],
+    });
+    rs.spyOn(scraper, "getEpisodes").mockResolvedValue([]);
+
+    await searchDanmu({
+      type: "tv",
+      tmdbId: "320",
+      season: "1",
+      episode: "1",
+      fuzzyMatch: "never",
+      "global.mediaRef.apiKey": secret,
+    } as SearchDanmuParams);
+
+    expect(logged.length).toBeGreaterThan(0);
+    expect(JSON.stringify(logged)).not.toContain(secret);
+  });
+});

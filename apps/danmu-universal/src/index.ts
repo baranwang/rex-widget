@@ -249,7 +249,10 @@ const checkShowEmptyAnimeTitle = (params: SearchDanmuParams) => {
 };
 
 searchDanmu = async (params) => {
-  console.log("searchDanmu params", params);
+  console.log("searchDanmu params", {
+    ...params,
+    ...(params["global.mediaRef.apiKey"] ? { "global.mediaRef.apiKey": "[redacted]" } : {}),
+  });
 
   const globalParams = scraper.setGlobalParams(params);
 
