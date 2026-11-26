@@ -1,6 +1,6 @@
 {
   "name": "@rexnow/danmu-universal",
-  "version": "0.18.0",
+  "version": "0.18.1",
   "type": "module",
   "main": "./dist/danmu-universal.js",
   "exports": {
