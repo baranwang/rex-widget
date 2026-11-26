@@ -1,5 +1,11 @@
 # @rexnow/danmu-universal
 
+## 0.18.1
+
+### Patch Changes
+
+- b70b20c: 修复 0.18.0 在 Rex 中加载失败（encoding API missing）：运行时缺少 TextEncoder / TextDecoder 时补上 UTF-8 实现。
+
 ## 0.18.0
 
 ### Minor Changes
