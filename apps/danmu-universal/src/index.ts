@@ -3,7 +3,7 @@ import { DoubanHistory } from "./experimental/douban-history";
 import { EMPTY_ANIME_CONFIG, type MediaType, PROVIDER_NAMES } from "./libs/constants";
 import { z } from "./libs/zod";
 import { DoubanMatcher } from "./matchers/douban";
-import { getLocalEpisodeParams } from "./matchers/local";
+import { getMediaRefEpisodeParams, reportMediaRefLeads } from "./matchers/mediaref";
 import { type GetEpisodeParam, scraper } from "./scrapers";
 
 if (import.meta.rstest) {
@@ -141,30 +141,11 @@ WidgetMetadata = {
       ],
     },
     {
-      title: "弹幕内容繁简转换",
-      name: "global.content.conversion",
-      value: "original",
-      type: "enumeration",
-      belongTo: LITE_VERSION
-        ? {
-            paramName: "__LITE_VERSION_FLAG__",
-            value: ["false"],
-          }
-        : undefined,
-      enumOptions: [
-        {
-          title: "原始",
-          value: "original",
-        },
-        {
-          title: "繁体 -> 简体",
-          value: "tc2sc",
-        },
-        {
-          title: "簡體 -> 正體",
-          value: "sc2tc",
-        },
-      ],
+      title: "MediaRef API Key",
+      name: "global.mediaRef.apiKey",
+      description: "留空使用内置 key；填写后改用自己的 key",
+      value: "",
+      type: "input",
     },
     {
       title: `[${PROVIDER_NAMES.renren}] 弹幕模式`,
@@ -268,7 +249,10 @@ const checkShowEmptyAnimeTitle = (params: SearchDanmuParams) => {
 };
 
 searchDanmu = async (params) => {
-  console.log("searchDanmu params", params);
+  console.log("searchDanmu params", {
+    ...params,
+    ...(params["global.mediaRef.apiKey"] ? { "global.mediaRef.apiKey": "[redacted]" } : {}),
+  });
 
   const globalParams = scraper.setGlobalParams(params);
 
@@ -330,25 +314,27 @@ searchDanmu = async (params) => {
   const tmdbId = params.tmdbId ? Number(params.tmdbId) : NaN;
   const isMovieOrTv = mediaType === "tv" || mediaType === "movie";
   const season = mediaType === "tv" && params.season !== undefined ? Number(params.season) : null;
-  const localEpisodeParams =
-    isMovieOrTv && Number.isInteger(tmdbId)
-      ? getLocalEpisodeParams({
-          type: mediaType,
-          tmdbId,
-          season,
-          episode: episode === undefined ? undefined : Number(episode),
-        })
-      : [];
-  if (localEpisodeParams.length) {
-    console.log("Found local episode params", localEpisodeParams);
-    const localEpisodes = await getMatchedEpisodes(localEpisodeParams, false);
-    if (localEpisodes.length) return toSearchResult(localEpisodes);
+  const mediaRefApiKey = globalParams?.global.mediaRef.apiKey ?? "";
+  let mediaRefEpisodeParams: GetEpisodeParam[] = [];
+  if (isMovieOrTv && Number.isInteger(tmdbId)) {
+    mediaRefEpisodeParams = await getMediaRefEpisodeParams({
+      apiKey: mediaRefApiKey,
+      type: mediaType,
+      tmdbId,
+      season,
+      episode: episode === undefined ? undefined : Number(episode),
+    });
+    if (mediaRefEpisodeParams.length) {
+      console.log("Found MediaRef episode params", mediaRefEpisodeParams);
+      const mediaRefEpisodes = await getMatchedEpisodes(mediaRefEpisodeParams, false);
+      if (mediaRefEpisodes.length) return toSearchResult(mediaRefEpisodes);
+    }
   }
 
   let episodesParams: GetEpisodeParam[] = [];
 
   const doubanMatcher = new DoubanMatcher();
-  const { doubanIds, videoPlatformInfo } = await doubanMatcher.getEpisodeParams(params);
+  const { doubanIds, videoPlatformInfo, tmdbMatch } = await doubanMatcher.getEpisodeParams(params);
   episodesParams = episodesParams.concat(normalizeDoubanTvCollections(videoPlatformInfo));
 
   try {
@@ -372,6 +358,20 @@ searchDanmu = async (params) => {
   }
 
   let episodes = await getMatchedEpisodes(episodesParams);
+  if (episodes.length && tmdbMatch && isMovieOrTv && Number.isInteger(tmdbId)) {
+    // 不等它：上报失败或变慢都不影响返回弹幕。
+    void reportMediaRefLeads({
+      apiKey: mediaRefApiKey,
+      type: mediaType,
+      tmdbId,
+      season,
+      episode: episode === undefined ? undefined : Number(episode),
+      doubanId: tmdbMatch.doubanId,
+      platforms: tmdbMatch.videoPlatformInfo,
+      episodes,
+      skipProviders: mediaRefEpisodeParams.map((item) => item.provider),
+    });
+  }
   if (!episodes.length && fuzzyMatch === "auto") {
     const searchEpisodes = await scraper.getEpisodeParams(params);
     episodes = await getMatchedEpisodes(searchEpisodes);

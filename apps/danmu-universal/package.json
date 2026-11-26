@@ -16,6 +16,8 @@
     "test": "rstest"
   },
   "dependencies": {
+    "@bufbuild/protobuf": "^2.17.0",
+    "@media-ref/client": "^1.0.0",
     "@rexnow/libs-fetch": "workspace:^",
     "@rexnow/libs-storage": "workspace:^",
     "@rexnow/libs-utils": "workspace:^",
@@ -25,7 +27,6 @@
     "date-fns": "^4.1.0",
     "es-toolkit": "^1.53.2",
     "fast-xml-parser": "^5.2.5",
-    "opencc-js": "^1.0.5",
     "querystringify": "^2.2.0",
     "url-parse": "^1.5.10",
     "zod": "^4.6.7"
@@ -33,13 +34,11 @@
   "devDependencies": {
     "@rexnow/libs": "^3.2.1",
     "@rexnow/rslib-plugin": "^3.2.1",
-    "@rexnow/tmdb-mapping-kit": "workspace:^",
     "@rsdoctor/rspack-plugin": "^1.6.5",
     "@rslib/core": "^1.0.7",
     "@rstest/core": "^0.12.6",
     "@types/crypto-js": "^4.2.2",
     "@types/node": "^26.6.6",
-    "@types/opencc-js": "^1.0.3",
     "@types/url-parse": "^1.4.11",
     "type-fest": "^4.41.0",
     "typescript": "^7.0.2"

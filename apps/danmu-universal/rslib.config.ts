@@ -7,6 +7,7 @@ export default defineConfig({
     define: {
       "process.env.PACKAGE_VERSION": JSON.stringify(pkg.version),
       "process.env.NODE_ENV": JSON.stringify(process.env.NODE_ENV),
+      "process.env.MEDIAREF_API_KEY": JSON.stringify(process.env.MEDIAREF_API_KEY ?? ""),
       "import.meta.rstest": false,
     },
   },
@@ -19,9 +20,6 @@ export default defineConfig({
         entry: {
           "danmu-universal": "./src/index.ts",
         },
-        define: {
-          LITE_VERSION: false,
-        },
       },
     },
     {
@@ -31,9 +29,6 @@ export default defineConfig({
       source: {
         entry: {
           "danmu-universal.lite": "./src/index.ts",
-        },
-        define: {
-          LITE_VERSION: true,
         },
       },
     },
@@ -61,5 +56,6 @@ export default defineConfig({
       },
     },
   },
-  plugins: [pluginRexWidget()],
+  // 产物里带着默认 MediaRef key，生产构建加密。
+  plugins: [pluginRexWidget({ encrypt: true })],
 });
