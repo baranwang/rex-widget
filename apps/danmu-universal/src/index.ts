@@ -1,3 +1,5 @@
+// 必须最先导入：Rex 运行时没有 Text Encoding API，protobuf 加载时就要用。
+import "./libs/text-encoding";
 import "./libs/fetch";
 import { DoubanHistory } from "./experimental/douban-history";
 import { EMPTY_ANIME_CONFIG, type MediaType, PROVIDER_NAMES } from "./libs/constants";
