@@ -3,7 +3,7 @@ import { DoubanHistory } from "./experimental/douban-history";
 import { EMPTY_ANIME_CONFIG, type MediaType, PROVIDER_NAMES } from "./libs/constants";
 import { z } from "./libs/zod";
 import { DoubanMatcher } from "./matchers/douban";
-import { getMediaRefEpisodeParams } from "./matchers/mediaref";
+import { getMediaRefEpisodeParams, reportMediaRefLeads } from "./matchers/mediaref";
 import { type GetEpisodeParam, scraper } from "./scrapers";
 
 if (import.meta.rstest) {
@@ -311,9 +311,11 @@ searchDanmu = async (params) => {
   const tmdbId = params.tmdbId ? Number(params.tmdbId) : NaN;
   const isMovieOrTv = mediaType === "tv" || mediaType === "movie";
   const season = mediaType === "tv" && params.season !== undefined ? Number(params.season) : null;
+  const mediaRefApiKey = globalParams?.global.mediaRef.apiKey ?? "";
+  let mediaRefEpisodeParams: GetEpisodeParam[] = [];
   if (isMovieOrTv && Number.isInteger(tmdbId)) {
-    const mediaRefEpisodeParams = await getMediaRefEpisodeParams({
-      apiKey: globalParams?.global.mediaRef.apiKey ?? "",
+    mediaRefEpisodeParams = await getMediaRefEpisodeParams({
+      apiKey: mediaRefApiKey,
       type: mediaType,
       tmdbId,
       season,
@@ -329,7 +331,7 @@ searchDanmu = async (params) => {
   let episodesParams: GetEpisodeParam[] = [];
 
   const doubanMatcher = new DoubanMatcher();
-  const { doubanIds, videoPlatformInfo } = await doubanMatcher.getEpisodeParams(params);
+  const { doubanIds, videoPlatformInfo, tmdbMatch } = await doubanMatcher.getEpisodeParams(params);
   episodesParams = episodesParams.concat(normalizeDoubanTvCollections(videoPlatformInfo));
 
   try {
@@ -353,6 +355,19 @@ searchDanmu = async (params) => {
   }
 
   let episodes = await getMatchedEpisodes(episodesParams);
+  if (episodes.length && tmdbMatch && isMovieOrTv && Number.isInteger(tmdbId)) {
+    // 不等它：上报失败或变慢都不影响返回弹幕。
+    void reportMediaRefLeads({
+      apiKey: mediaRefApiKey,
+      type: mediaType,
+      tmdbId,
+      season,
+      doubanId: tmdbMatch.doubanId,
+      platforms: tmdbMatch.videoPlatformInfo,
+      episodes,
+      skipProviders: mediaRefEpisodeParams.map((item) => item.provider),
+    });
+  }
   if (!episodes.length && fuzzyMatch === "auto") {
     const searchEpisodes = await scraper.getEpisodeParams(params);
     episodes = await getMatchedEpisodes(searchEpisodes);

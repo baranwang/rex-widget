@@ -3,7 +3,7 @@ import "../index";
 import { initializeFetchAdapter } from "../libs/fetch";
 import { scraper } from "../scrapers";
 import { DoubanMatcher } from "./douban";
-import { getMediaRefEpisodeParams } from "./mediaref";
+import { getMediaRefEpisodeParams, reportMediaRefLeads } from "./mediaref";
 
 type Seg = {
   season: number;
@@ -268,5 +268,135 @@ describe("searchDanmu 接入 MediaRef", () => {
       episodeNumber: 15,
     });
     expect(result?.animes).toHaveLength(1);
+  });
+});
+
+const CREATE_CR_URL = "https://api.mediaref.org/mediaref.v1.ChangeRequestService/CreateChangeRequest";
+const okCr = { data: { changeRequest: { id: "cr" } }, statusCode: 200, headers: {} };
+const leadBodies = (post: ReturnType<typeof mockPost>) =>
+  post.mock.calls.filter(([url]) => url === CREATE_CR_URL).map(([, body]) => body);
+
+describe("reportMediaRefLeads", () => {
+  const base = {
+    apiKey: "k",
+    type: "tv" as const,
+    tmdbId: 300,
+    season: 2,
+    doubanId: "35000000",
+    platforms: [
+      { provider: "tencent", idString: "cid=mzc00200mp8vo9b" },
+      { provider: "bilibili", idString: "seasonId=28770" },
+      { provider: "iqiyi", idString: "entityId=5328486914190101" },
+    ],
+    episodes: [
+      { provider: "tencent", episodeId: "tencent:cid=mzc00200mp8vo9b&vid=v1" },
+      { provider: "bilibili", episodeId: "bilibili:seasonId=28770&aid=1&cid=2" },
+    ],
+    skipProviders: ["bilibili"],
+  };
+
+  test("豆瓣条目和拉到分集的平台合集一起提交，跳过没拉到的和 MediaRef 已有的", async () => {
+    const post = mockPost().mockResolvedValue(okCr as never);
+
+    await reportMediaRefLeads(base);
+
+    const target = { tmdb: { type: "MEDIA_TYPE_TV", id: 300 } };
+    const segments = [{ wholeSeason: { season: 2, baseline: "tmdb" } }];
+    expect(leadBodies(post)).toEqual([
+      { target, namespace: "douban", nativeId: "35000000", segments },
+      {
+        target,
+        namespace: "tencent",
+        nativeId: "mzc00200mp8vo9b",
+        variantDescription: "原声",
+        setDefaultVariant: true,
+        segments,
+      },
+    ]);
+    const [, , options] = post.mock.calls[0] as unknown as [string, unknown, { headers: Record<string, string> }];
+    expect(options.headers["X-API-Key"]).toBe("k");
+  });
+
+  test("同一条 7 天内只提交一次，失败也不重试", async () => {
+    const post = mockPost()
+      .mockRejectedValueOnce(new Error("HTTP 429"))
+      .mockResolvedValue(okCr as never);
+    const params = { ...base, tmdbId: 301 };
+
+    await reportMediaRefLeads(params);
+    await reportMediaRefLeads(params);
+
+    expect(leadBodies(post)).toHaveLength(2);
+  });
+
+  test("没有拉到分集的平台时什么都不提交（也不提交豆瓣）", async () => {
+    const post = mockPost();
+    await reportMediaRefLeads({ ...base, tmdbId: 302, episodes: [] });
+    expect(post).not.toHaveBeenCalled();
+  });
+
+  test("电影不带 segments", async () => {
+    const post = mockPost().mockResolvedValue(okCr as never);
+    await reportMediaRefLeads({ ...base, type: "movie", tmdbId: 303, season: null, skipProviders: [] });
+    expect(leadBodies(post).every((body) => (body as { segments: unknown[] }).segments.length === 0)).toBe(true);
+    expect(leadBodies(post)).toHaveLength(3);
+  });
+});
+
+describe("searchDanmu 上报线索", () => {
+  const flush = async () => {
+    for (let i = 0; i < 10; i += 1) await new Promise((resolve) => setTimeout(resolve, 5));
+  };
+
+  test("MediaRef 未映射、豆瓣经 TMDB 命中并拉到分集时上报", async () => {
+    const post = mockPost()
+      .mockResolvedValueOnce(mediaRefResponse("tv", []) as never)
+      .mockResolvedValue(okCr as never);
+    const platform = { provider: "tencent", idString: "cid=mzc00200mp8vo9b" };
+    rs.spyOn(DoubanMatcher.prototype, "getEpisodeParams").mockResolvedValueOnce({
+      doubanIds: ["35000001"],
+      videoPlatformInfo: [platform],
+      tmdbMatch: { doubanId: "35000001", videoPlatformInfo: [platform] },
+    });
+    rs.spyOn(scraper, "getEpisodes").mockResolvedValueOnce([
+      { provider: "tencent", episodeId: "tencent:cid=mzc00200mp8vo9b&vid=v3", episodeTitle: "第3集", episodeNumber: 3 },
+    ]);
+
+    await searchDanmu({
+      type: "tv",
+      tmdbId: "310",
+      season: "1",
+      episode: "3",
+      fuzzyMatch: "never",
+      "global.mediaRef.apiKey": "user-key",
+    } as SearchDanmuParams);
+    await flush();
+
+    expect(leadBodies(post).map((body) => (body as { namespace: string }).namespace)).toEqual(["douban", "tencent"]);
+  });
+
+  test("豆瓣是按名字搜到的（没有 tmdbMatch）时不上报", async () => {
+    const post = mockPost()
+      .mockResolvedValueOnce(mediaRefResponse("tv", []) as never)
+      .mockResolvedValue(okCr as never);
+    rs.spyOn(DoubanMatcher.prototype, "getEpisodeParams").mockResolvedValueOnce({
+      doubanIds: ["35000002"],
+      videoPlatformInfo: [{ provider: "tencent", idString: "cid=mzc00200mp8vo9b" }],
+    });
+    rs.spyOn(scraper, "getEpisodes").mockResolvedValueOnce([
+      { provider: "tencent", episodeId: "tencent:cid=mzc00200mp8vo9b&vid=v3", episodeTitle: "第3集", episodeNumber: 3 },
+    ]);
+
+    await searchDanmu({
+      type: "tv",
+      tmdbId: "311",
+      season: "1",
+      episode: "3",
+      fuzzyMatch: "never",
+      "global.mediaRef.apiKey": "user-key",
+    } as SearchDanmuParams);
+    await flush();
+
+    expect(leadBodies(post)).toEqual([]);
   });
 });

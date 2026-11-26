@@ -6,13 +6,19 @@ import {
   proto,
   resolveEpisode,
 } from "@media-ref/client";
-import { generateProviderIdString } from "@rexnow/scraper-kit";
+import {
+  collectionProviderIdString,
+  generateProviderIdString,
+  isProviderName,
+  parseProviderIdString,
+} from "@rexnow/scraper-kit";
 import type { MediaType } from "../libs/constants";
 import { Fetch } from "../libs/fetch";
-import { TTL_1_DAY } from "../libs/storage";
+import { storage, TTL_1_DAY, TTL_7_DAYS } from "../libs/storage";
 import type { GetEpisodeParam } from "../scrapers";
 
 const GET_MEDIA_URL = "https://api.mediaref.org/mediaref.v1.MediaService/GetMedia";
+const CREATE_CHANGE_REQUEST_URL = "https://api.mediaref.org/mediaref.v1.ChangeRequestService/CreateChangeRequest";
 /** Widget.http timeout, in seconds. */
 const TIMEOUT_SECONDS = 3;
 
@@ -104,4 +110,110 @@ export const getMediaRefEpisodeParams = async ({
     console.error("MediaRef lookup failed", error);
     return [];
   }
+};
+
+/** 平台 idString → MediaRef 规范 nativeId；没有合集 ID 时返回 null。 */
+const toNativeId = (provider: string, idString: string): string | null => {
+  try {
+    switch (provider) {
+      case "tencent":
+        return parseProviderIdString("tencent", idString).cid;
+      case "youku":
+        return parseProviderIdString("youku", idString).showId ?? null;
+      case "iqiyi":
+        return parseProviderIdString("iqiyi", idString).entityId;
+      case "bilibili":
+        return `ss${parseProviderIdString("bilibili", idString).seasonId}`;
+      case "mgtv":
+        return parseProviderIdString("mgtv", idString).dramaId;
+      default:
+        return null;
+    }
+  } catch {
+    return null;
+  }
+};
+
+const sameCollection = (provider: string, a: string, b: string): boolean => {
+  if (!isProviderName(provider)) return false;
+  try {
+    return collectionProviderIdString(provider, a) === collectionProviderIdString(provider, b);
+  } catch {
+    return false;
+  }
+};
+
+export interface MediaRefLeadParams {
+  apiKey: string;
+  type: MediaType | "movie" | "tv";
+  tmdbId: number;
+  season?: number | null;
+  doubanId: string;
+  /** 豆瓣给出的平台合集。 */
+  platforms: GetEpisodeParam[];
+  /** 实际拉到的分集；episodeId 形如 `<provider>:<idString>`。 */
+  episodes: { provider: string; episodeId: string }[];
+  /** MediaRef 已经给过的平台，不再上报。 */
+  skipProviders: string[];
+}
+
+/**
+ * 豆瓣命中且确实拉到分集、MediaRef 却没有的平台合集，连同豆瓣条目一起作为变更单交给 MediaRef，
+ * 由证据门决定是否生效。失败只打日志。
+ * shortcut: 只按本机缓存去重（7 天），多个用户会重复提交同一条；MediaRef 有线索接口后改用它。
+ */
+export const reportMediaRefLeads = async ({
+  apiKey,
+  type,
+  tmdbId,
+  season,
+  doubanId,
+  platforms,
+  episodes,
+  skipProviders,
+}: MediaRefLeadParams): Promise<void> => {
+  if (!apiKey || !Number.isInteger(tmdbId)) return;
+  const isTv = type === "tv";
+  if (isTv && (season === null || season === undefined)) return;
+  const segments = isTv ? [{ wholeSeason: { season, baseline: "tmdb" } }] : [];
+
+  const verified = new Map<string, { namespace: string; nativeId: string }>();
+  for (const { provider, idString } of platforms) {
+    if (skipProviders.includes(provider)) continue;
+    const hit = episodes.some(
+      (e) => e.provider === provider && sameCollection(provider, e.episodeId.slice(provider.length + 1), idString),
+    );
+    const nativeId = hit ? toNativeId(provider, idString) : null;
+    if (nativeId) verified.set(`${provider}:${nativeId}`, { namespace: provider, nativeId });
+  }
+  if (!verified.size) return;
+
+  const leads = [
+    { namespace: "douban", nativeId: doubanId },
+    ...[...verified.values()].map((lead) => ({ ...lead, variantDescription: "原声", setDefaultVariant: true })),
+  ];
+  const target = { tmdb: { type: isTv ? "MEDIA_TYPE_TV" : "MEDIA_TYPE_MOVIE", id: tmdbId } };
+  const fetch = new Fetch();
+
+  await Promise.all(
+    leads.map(async (lead) => {
+      const cacheKey = `mediaref:lead:${type}:${tmdbId}:${isTv ? season : "-"}:${lead.namespace}:${lead.nativeId}`;
+      try {
+        if (await storage.getJson(cacheKey)) return;
+        // 先记下再提交：被限额或拒绝也不在 7 天内反复提交。
+        storage.setJson(cacheKey, true, { ttl: TTL_7_DAYS });
+        await fetch.post(
+          CREATE_CHANGE_REQUEST_URL,
+          { target, ...lead, segments },
+          {
+            headers: { "Content-Type": "application/json", "X-API-Key": apiKey },
+            timeout: TIMEOUT_SECONDS,
+            successStatus: [200],
+          },
+        );
+      } catch (error) {
+        console.error("MediaRef lead report failed", lead, error);
+      }
+    }),
+  );
 };

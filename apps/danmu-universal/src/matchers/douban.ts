@@ -248,11 +248,13 @@ export class DoubanMatcher {
 
   private async getDoubanIds(params: SearchDanmuParams) {
     const doubanIds = new Set<string>();
+    let tmdbDoubanId: string | null = null;
     const { tmdbId, type, seriesName, season, fuzzyMatch } = searchDanmuParamsSchema.parse(params);
     try {
       const doubanInfo = await this.getDoubanInfoByTmdbId(type, tmdbId, season);
       if (doubanInfo?.doubanId) {
         doubanIds.add(doubanInfo.doubanId);
+        tmdbDoubanId = doubanInfo.doubanId;
       }
     } catch (error) {
       this.logger.error("Error getting douban info by tmdb id", error);
@@ -273,21 +275,29 @@ export class DoubanMatcher {
         this.logger.error("Error searching douban info by name", error);
       }
     }
-    return Array.from(doubanIds);
+    return { doubanIds: Array.from(doubanIds), tmdbDoubanId };
   }
 
-  public async getEpisodeParams(params: SearchDanmuParams) {
-    const doubanIds = await this.getDoubanIds(params);
+  public async getEpisodeParams(params: SearchDanmuParams): Promise<{
+    doubanIds: string[];
+    videoPlatformInfo: GetEpisodeParam[];
+    /** 经 TMDB → IMDb 精确查到的豆瓣条目及其平台（不含按名字搜到的），可作为线索上报。 */
+    tmdbMatch?: { doubanId: string; videoPlatformInfo: GetEpisodeParam[] };
+  }> {
+    const { doubanIds, tmdbDoubanId } = await this.getDoubanIds(params);
     this.logger.info("获取到豆瓣ID", doubanIds);
     const results: GetEpisodeParam[] = [];
+    let tmdbMatch: { doubanId: string; videoPlatformInfo: GetEpisodeParam[] } | undefined;
     for (const doubanId of doubanIds) {
       const videoPlatformInfo = await this.getVideoPlatformInfoByDoubanId(doubanId);
       results.push(...videoPlatformInfo);
+      if (doubanId === tmdbDoubanId) tmdbMatch = { doubanId, videoPlatformInfo };
     }
     this.logger.info("获取到视频平台信息", results);
     return {
       doubanIds,
       videoPlatformInfo: results,
+      tmdbMatch,
     };
   }
 }
