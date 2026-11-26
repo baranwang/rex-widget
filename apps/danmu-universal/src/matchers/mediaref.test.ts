@@ -276,10 +276,11 @@ const okCr = { data: { changeRequest: { id: "cr" } }, statusCode: 200, headers: 
 const leadBodies = (post: ReturnType<typeof mockPost>) =>
   post.mock.calls.filter(([url]) => url === CREATE_CR_URL).map(([, body]) => body);
 
-const mockTmdbSeason = (episodeCount: number) =>
-  rs
-    .spyOn(Widget.tmdb, "get")
-    .mockResolvedValue({ episodes: Array.from({ length: episodeCount }, () => ({})) } as never);
+/** TMDB 这一季：前 aired 集已播出，其余是未来日期。 */
+const mockTmdbSeason = (aired: number, total = aired) =>
+  rs.spyOn(Widget.tmdb, "get").mockResolvedValue({
+    episodes: Array.from({ length: total }, (_, k) => ({ air_date: k < aired ? "2020-01-01" : "2999-01-01" })),
+  } as never);
 const collectionEpisodes = (provider: string, count: number) =>
   Array.from({ length: count }, (_, i) => ({
     provider,
@@ -333,7 +334,20 @@ describe("reportMediaRefLeads", () => {
     expect(options.headers["X-API-Key"]).toBe("k");
   });
 
-  test("一季拆成多个合集（合集集数少于整季）时不报", async () => {
+  test.each([
+    ["剧集还在更新：TMDB 已播 8 集（共 24 集），平台已有 9 集", 8, 24, 9],
+    ["TMDB 更新落后：TMDB 只有 10 集，平台已有 12 集", 10, 10, 12],
+  ])("%s 时照常上报", async (_, aired, total, platformCount) => {
+    const post = mockPost().mockResolvedValue(okCr as never);
+    mockTmdbSeason(aired, total);
+    rs.spyOn(scraper, "getEpisodes").mockResolvedValue(collectionEpisodes("tencent", platformCount));
+
+    await reportMediaRefLeads({ ...base, tmdbId: 306 + aired });
+
+    expect(leadBodies(post).map((body) => (body as { namespace: string }).namespace)).toEqual(["douban", "tencent"]);
+  });
+
+  test("一季拆成多个合集（合集集数少于 TMDB 已播集数）时不报", async () => {
     const post = mockPost().mockResolvedValue(okCr as never);
     mockTmdbSeason(24);
     rs.spyOn(scraper, "getEpisodes").mockResolvedValue(collectionEpisodes("tencent", 12));

@@ -162,8 +162,9 @@ export interface MediaRefLeadParams {
 /**
  * 豆瓣命中且确实拉到分集、MediaRef 却没有的平台合集，连同豆瓣条目一起作为变更单交给 MediaRef，
  * 由证据门决定是否生效。失败只打日志。
- * 剧集按整季提交，所以先核对：请求的集在合集里集号不变，合集的正片集数等于 TMDB 这一季的集数。
- * 一季拆成多个合集、或一个合集跨季时对不上，就不报，免得编出错误的覆盖范围。
+ * 剧集按整季提交，所以先核对：请求的集在合集里集号不变（排除偏移和跨季接续），且合集的正片集数
+ * 不少于 TMDB 这一季已播出的集数（排除一季拆成多个合集）。平台和 TMDB 更新进度不同步，
+ * 平台多于 TMDB 不算问题；具体覆盖范围交给证据门核对。
  * shortcut: 只按本机缓存去重（7 天），多个用户会重复提交同一条；MediaRef 有线索接口后改用它。
  */
 export const reportMediaRefLeads = async ({
@@ -182,15 +183,20 @@ export const reportMediaRefLeads = async ({
   if (isTv && (season === null || season === undefined || episode === undefined)) return;
   const segments = isTv ? [{ wholeSeason: { season, baseline: "tmdb" } }] : [];
 
-  let tmdbEpisodeCount = 0;
+  let tmdbAiredCount: number | null = null;
   if (isTv) {
     try {
-      const detail = await Widget.tmdb.get<{ episodes?: unknown[] }>(`/tv/${tmdbId}/season/${season}`);
-      tmdbEpisodeCount = detail?.episodes?.length ?? 0;
+      const detail = await Widget.tmdb.get<{ episodes?: { air_date?: string | null }[] }>(
+        `/tv/${tmdbId}/season/${season}`,
+      );
+      const today = new Date().toISOString().slice(0, 10);
+      if (detail?.episodes) {
+        tmdbAiredCount = detail.episodes.filter((e) => e.air_date && e.air_date <= today).length;
+      }
     } catch (error) {
       console.error("MediaRef lead: TMDB season lookup failed", error instanceof Error ? error.message : error);
     }
-    if (!tmdbEpisodeCount) return;
+    if (tmdbAiredCount === null) return;
   }
 
   const verified = new Map<string, { namespace: string; nativeId: string }>();
@@ -211,7 +217,7 @@ export const reportMediaRefLeads = async ({
         const numbered = new Set(
           all.map((e) => e.episodeNumber).filter((n) => Number.isInteger(n) && (n as number) > 0),
         );
-        if (numbered.size !== tmdbEpisodeCount) continue;
+        if (numbered.size < (tmdbAiredCount ?? 0)) continue;
       } catch {
         continue;
       }
