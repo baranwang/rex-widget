@@ -32,27 +32,6 @@ export class Scraper {
     this._scraperMap = registry.scraperMap;
   }
 
-  get conversionConverter() {
-    if (!LITE_VERSION) {
-      const openCC = require("opencc-js") as typeof import("opencc-js");
-      const conversionConfig = this.globalParams.global.content.conversion;
-      if (conversionConfig === "tc2sc") {
-        return openCC.Converter({
-          from: "t",
-          to: "cn",
-        });
-      }
-      if (conversionConfig === "sc2tc") {
-        return openCC.Converter({
-          from: "cn",
-          to: "t",
-        });
-      }
-      return null;
-    }
-    return null;
-  }
-
   get scraperMap(): ScraperProviderMap {
     return this._scraperMap;
   }
@@ -89,7 +68,6 @@ export class Scraper {
     segmentTime = 0,
     ...args: { provider: string; idString: string }[]
   ): Promise<CommentItem[]> {
-    const conversionConverter = this.conversionConverter;
     const tasks = args.map(async ({ provider, idString }) => {
       try {
         const segments = await this.getSegmentsByProvider(provider, idString);
@@ -137,10 +115,7 @@ export class Scraper {
     }
     const comments: CommentItem[] = [];
     contentMap.forEach(({ item, count, provider }) => {
-      let content = count > 1 ? `${item.content} × ${count}` : item.content;
-      if (conversionConverter) {
-        content = conversionConverter(content);
-      }
+      const content = count > 1 ? `${item.content} × ${count}` : item.content;
       const color = this.globalParams.global.content.preserveDanmakuColor ? item.color : DEFAULT_COLOR_INT;
       comments.push({
         cid: item.id,

@@ -4,6 +4,7 @@ packages:
 minimumReleaseAgeExclude:
   - "@rexnow/libs"
   - "@rexnow/rslib-plugin"
+  - "@media-ref/client@1.0.0"
 allowBuilds:
   "@google/genai": false
   core-js: false

@@ -20,13 +20,11 @@ describe("preserveDanmakuColor config", () => {
   test("preserveDanmakuColor keeps shared configuration", () => {
     const config = globalParamsConfigSchema.parse({
       "global.content.aggregation": "false",
-      "global.content.conversion": "tc2sc",
       "provider.renren.mode": "choice",
       "global.content.preserveDanmakuColor": "false",
     });
 
     expect(config.global.content.aggregation).toBe(false);
-    expect(config.global.content.conversion).toBe("tc2sc");
     expect(config.provider.renren.mode).toBe("choice");
     expect(config.global.content.preserveDanmakuColor).toBe(false);
     expect(config.global.experimental.doubanHistory.enabled).toBe(false);

@@ -9,9 +9,4 @@ export default defineConfig({
     type: "forks",
     execArgv: ["--env-file-if-exists=.env"],
   },
-  source: {
-    define: {
-      LITE_VERSION: false,
-    },
-  },
 });

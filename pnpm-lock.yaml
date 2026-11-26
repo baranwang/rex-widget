@@ -199,6 +199,12 @@ importers:
 
   apps/danmu-universal:
     dependencies:
+      '@bufbuild/protobuf':
+        specifier: ^2.17.0
+        version: 2.17.0
+      '@media-ref/client':
+        specifier: ^1.0.0
+        version: 1.0.0
       '@rexnow/libs-fetch':
         specifier: workspace:^
         version: link:../../packages/fetch
@@ -226,9 +232,6 @@ importers:
       fast-xml-parser:
         specifier: ^5.2.5
         version: 5.2.5
-      opencc-js:
-        specifier: ^1.0.5
-        version: 1.0.5
       querystringify:
         specifier: ^2.2.0
         version: 2.2.0
@@ -263,9 +266,6 @@ importers:
       '@types/node':
         specifier: ^26.6.6
         version: 26.6.6
-      '@types/opencc-js':
-        specifier: ^1.0.3
-        version: 1.0.3
       '@types/url-parse':
         specifier: ^1.4.11
         version: 1.4.11
@@ -764,6 +764,9 @@ packages:
     cpu: [x64]
     os: [win32]
 
+  '@bufbuild/protobuf@2.17.0':
+    resolution: {integrity: sha512-hcPkSz6D7MiTU/5VBBhK+kxaYDoOdQ6yJRFJ3kS8Nydp+VZXfg1vrpABKPNod8bXMufsVCmiUJVIKFzCzta4uw==}
+
   '@changesets/apply-release-plan@8.1.1':
     resolution: {integrity: sha512-nk2Hbq3M9NeHMdaIRBDvawKrQJzXB9sGyBUE5yWnIKtvdcNCPj75zBekJYr0gTT2ecJH3eFeTrc8eisPImcv0Q==}
     engines: {node: ^22.11 || ^24 || >=26}
@@ -832,6 +835,17 @@ packages:
   '@clack/prompts@1.9.0':
     resolution: {integrity: sha512-tEj8X2No2A1c9NDnZECxiiJ8TP3vmFlN9tLlLeSaMqVW4tUmVG2R4qpv/eP4zymWxnymYLkLcIYVV0VcWj3RCQ==}
     engines: {node: '>= 20.12.0'}
+
+  '@connectrpc/connect-web@2.3.0':
+    resolution: {integrity: sha512-JPXOiWaVsj+ZwaXOQjwvhc0ORnkl0a1w36Qyl3j1WTuak6/VYyuWGl1Aq8I60gQfQRjsjLLFGr64tO0sjwstcg==}
+    peerDependencies:
+      '@bufbuild/protobuf': ^2.7.0
+      '@connectrpc/connect': 2.3.0
+
+  '@connectrpc/connect@2.3.0':
+    resolution: {integrity: sha512-rjAn8L9KbAZrkwiB8m1qzDsLs74hkYmwwM2iSWuxTPVOTRm/EZw31smKbQqPU50AXqJC5eKKpEnA6Uf/swQOgQ==}
+    peerDependencies:
+      '@bufbuild/protobuf': ^2.7.0
 
   '@earendil-works/chord@0.85.1':
     resolution: {integrity: sha512-VDlkEC3dhCzQ5fcyH1OhG19dq+6jCn+rqc/iXFivwDYGR5anwo2RCiXij9PpHhqNR5GuhhE+Er69Zi1Sn4eY6w==}
@@ -1127,6 +1141,9 @@ packages:
   '@mariozechner/clipboard@0.3.9':
     resolution: {integrity: sha512-ABnA53mdfkGZwOFUdZNv2S0CWGO/EIuPj8Vv9xmBFmSYg/qFc7ihO6q5FcQjvoE67kZpWkEc4AhD6B/os04yuA==}
     engines: {node: '>= 10'}
+
+  '@media-ref/client@1.0.0':
+    resolution: {integrity: sha512-MMYLKQz6EfvWbgMIWG/wwy46JOK0LpOL+/kC9kxds773MIRgAovHMBsxn92Fai1yCG8qaj5WZIZuG9I4s7fs1A==}
 
   '@napi-rs/wasm-runtime@1.2.7':
     resolution: {integrity: sha512-zJccwplOAbgfZju95IUHazLnx9RAPtPN2YGJXI6UbrgeaR9QfPjGrQL6ERkSAtnVCA4Q+83ApGyaX5zdpCaKkQ==}
@@ -1541,9 +1558,6 @@ packages:
 
   '@types/node@26.6.6':
     resolution: {integrity: sha512-MzQj+8Kx3XI40OmUAE6Qoh58ZMNstNNMwn2nfd3qWsfe7nDNSqJNzes4njhz6AHwrSHOffSLwXU6yb474Q4aog==}
-
-  '@types/opencc-js@1.0.3':
-    resolution: {integrity: sha512-TENp7YkI2hNlc4dplhivSHj0hU4DORCK56VY7rniaSfA5f87uD3uv+kPIRuH9h64TGv976iVFi4gEHZZtS2y8Q==}
 
   '@types/querystringify@2.0.2':
     resolution: {integrity: sha512-7d6OQK6pJ//zE32XLK3vI6GHYhBDcYooaRco9cKFGNu59GVatL5+u7rkiAViq44DxDTd/7QQNBWSDHfJGBz/Pw==}
@@ -2290,9 +2304,6 @@ packages:
       zod:
         optional: true
 
-  opencc-js@1.0.5:
-    resolution: {integrity: sha512-LD+1SoNnZdlRwtYTjnQdFrSVCAaYpuDqL5CkmOaHOkKoKh7mFxUicLTRVNLU5C+Jmi1vXQ3QL4jWdgSaa4sKjg==}
-
   optionator@0.8.3:
     resolution: {integrity: sha512-+IW9pACdk3XWmmTXG8m3upGUJst5XRGzxMRjXzAuJ1XnIFNvfhjjIuYkDvysnPQ7qzqVzLt78BCruntqRhWQbA==}
     engines: {node: '>= 0.8.0'}
@@ -2995,6 +3006,8 @@ snapshots:
   '@biomejs/cli-win32-x64@2.6.8':
     optional: true
 
+  '@bufbuild/protobuf@2.17.0': {}
+
   '@changesets/apply-release-plan@8.1.1':
     dependencies:
       '@changesets/config': 4.0.1
@@ -3111,6 +3124,15 @@ snapshots:
       fast-string-width: 3.0.2
       fast-wrap-ansi: 0.2.2
       sisteransi: 2.0.0
+
+  '@connectrpc/connect-web@2.3.0(@bufbuild/protobuf@2.17.0)(@connectrpc/connect@2.3.0(@bufbuild/protobuf@2.17.0))':
+    dependencies:
+      '@bufbuild/protobuf': 2.17.0
+      '@connectrpc/connect': 2.3.0(@bufbuild/protobuf@2.17.0)
+
+  '@connectrpc/connect@2.3.0(@bufbuild/protobuf@2.17.0)':
+    dependencies:
+      '@bufbuild/protobuf': 2.17.0
 
   '@earendil-works/chord@0.85.1':
     dependencies:
@@ -3376,6 +3398,12 @@ snapshots:
       '@mariozechner/clipboard-win32-arm64-msvc': 0.3.9
       '@mariozechner/clipboard-win32-x64-msvc': 0.3.9
     optional: true
+
+  '@media-ref/client@1.0.0':
+    dependencies:
+      '@bufbuild/protobuf': 2.17.0
+      '@connectrpc/connect': 2.3.0(@bufbuild/protobuf@2.17.0)
+      '@connectrpc/connect-web': 2.3.0(@bufbuild/protobuf@2.17.0)(@connectrpc/connect@2.3.0(@bufbuild/protobuf@2.17.0))
 
   '@napi-rs/wasm-runtime@1.2.7(@emnapi/core@2.0.0-beta.3)(@emnapi/runtime@2.0.0-beta.3)':
     dependencies:
@@ -3818,8 +3846,6 @@ snapshots:
   '@types/node@26.6.6':
     dependencies:
       undici-types: 8.9.0
-
-  '@types/opencc-js@1.0.3': {}
 
   '@types/querystringify@2.0.2': {}
 
@@ -4498,8 +4524,6 @@ snapshots:
     optionalDependencies:
       ws: 8.21.3
       zod: 4.6.7
-
-  opencc-js@1.0.5: {}
 
   optionator@0.8.3:
     dependencies:

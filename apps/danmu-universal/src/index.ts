@@ -4,6 +4,7 @@ import { EMPTY_ANIME_CONFIG, type MediaType, PROVIDER_NAMES } from "./libs/const
 import { z } from "./libs/zod";
 import { DoubanMatcher } from "./matchers/douban";
 import { getLocalEpisodeParams } from "./matchers/local";
+import { getMediaRefEpisodeParams } from "./matchers/mediaref";
 import { type GetEpisodeParam, scraper } from "./scrapers";
 
 if (import.meta.rstest) {
@@ -141,30 +142,11 @@ WidgetMetadata = {
       ],
     },
     {
-      title: "弹幕内容繁简转换",
-      name: "global.content.conversion",
-      value: "original",
-      type: "enumeration",
-      belongTo: LITE_VERSION
-        ? {
-            paramName: "__LITE_VERSION_FLAG__",
-            value: ["false"],
-          }
-        : undefined,
-      enumOptions: [
-        {
-          title: "原始",
-          value: "original",
-        },
-        {
-          title: "繁体 -> 简体",
-          value: "tc2sc",
-        },
-        {
-          title: "簡體 -> 正體",
-          value: "sc2tc",
-        },
-      ],
+      title: "MediaRef API Key",
+      name: "global.mediaRef.apiKey",
+      description: "留空使用内置 key；填写后改用自己的 key",
+      value: "",
+      type: "input",
     },
     {
       title: `[${PROVIDER_NAMES.renren}] 弹幕模式`,
@@ -339,6 +321,20 @@ searchDanmu = async (params) => {
           episode: episode === undefined ? undefined : Number(episode),
         })
       : [];
+  if (isMovieOrTv && Number.isInteger(tmdbId)) {
+    const mediaRefEpisodeParams = await getMediaRefEpisodeParams({
+      apiKey: globalParams?.global.mediaRef.apiKey ?? "",
+      type: mediaType,
+      tmdbId,
+      season,
+      episode: episode === undefined ? undefined : Number(episode),
+    });
+    if (mediaRefEpisodeParams.length) {
+      console.log("Found MediaRef episode params", mediaRefEpisodeParams);
+      const mediaRefEpisodes = await getMatchedEpisodes(mediaRefEpisodeParams, false);
+      if (mediaRefEpisodes.length) return toSearchResult(mediaRefEpisodes);
+    }
+  }
   if (localEpisodeParams.length) {
     console.log("Found local episode params", localEpisodeParams);
     const localEpisodes = await getMatchedEpisodes(localEpisodeParams, false);
