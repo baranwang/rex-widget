@@ -361,8 +361,8 @@ searchDanmu = async (params) => {
 
   let episodes = await getMatchedEpisodes(episodesParams);
   if (episodes.length && tmdbMatch && isMovieOrTv && Number.isInteger(tmdbId)) {
-    // 不等它：上报失败或变慢都不影响返回弹幕。
-    void reportMediaRefLeads({
+    // Rex 不保证函数返回后还会跑完剩下的请求，所以等上报完成，但最多等 2 秒；失败不影响返回弹幕。
+    const report = reportMediaRefLeads({
       apiKey: mediaRefApiKey,
       type: mediaType,
       tmdbId,
@@ -373,6 +373,7 @@ searchDanmu = async (params) => {
       episodes,
       skipProviders: mediaRefEpisodeParams.map((item) => item.provider),
     });
+    await Promise.race([report, new Promise((resolve) => setTimeout(resolve, 2000))]);
   }
   if (!episodes.length && fuzzyMatch === "auto") {
     const searchEpisodes = await scraper.getEpisodeParams(params);
