@@ -143,6 +143,40 @@ const sameCollection = (provider: string, a: string, b: string): boolean => {
   }
 };
 
+type LeadEpisode = { provider: string; episodeId: string; episodeNumber?: number };
+type DoubanPlatforms = { doubanId: string; videoPlatformInfo: GetEpisodeParam[] };
+
+/** 拉到的分集里属于这个平台合集的那一集；剧集还要求集号和 TMDB 一致（排除偏移和跨季接续）。 */
+const findHit = (provider: string, idString: string, episodes: LeadEpisode[], episode?: number) =>
+  episodes.find(
+    (e) =>
+      e.provider === provider &&
+      sameCollection(provider, e.episodeId.slice(provider.length + 1), idString) &&
+      (episode === undefined || e.episodeNumber === episode),
+  );
+
+/**
+ * 选出要上报的豆瓣条目：优先经 TMDB → IMDb 精确查到的；查不到时（多季剧常见，IMDb 不分季），
+ * 在按名字搜到的条目里，只有恰好一个条目的平台合集拉到了这一集才用它，多个命中视为有歧义不报。
+ */
+export const pickLeadSource = ({
+  tmdbMatch,
+  matches = [],
+  episodes,
+  episode,
+}: {
+  tmdbMatch?: DoubanPlatforms;
+  matches?: DoubanPlatforms[];
+  episodes: LeadEpisode[];
+  episode?: number;
+}): DoubanPlatforms | undefined => {
+  if (tmdbMatch) return tmdbMatch;
+  const hits = matches.filter((m) =>
+    m.videoPlatformInfo.some(({ provider, idString }) => findHit(provider, idString, episodes, episode)),
+  );
+  return hits.length === 1 ? hits[0] : undefined;
+};
+
 export interface MediaRefLeadParams {
   apiKey: string;
   type: MediaType | "movie" | "tv";
@@ -154,7 +188,7 @@ export interface MediaRefLeadParams {
   /** 豆瓣给出的平台合集。 */
   platforms: GetEpisodeParam[];
   /** 实际拉到的分集；episodeId 形如 `<provider>:<idString>`。 */
-  episodes: { provider: string; episodeId: string; episodeNumber?: number }[];
+  episodes: LeadEpisode[];
   /** MediaRef 已经给过的平台，不再上报。 */
   skipProviders: string[];
 }
@@ -185,12 +219,10 @@ export const reportMediaRefLeads = async ({
   const verified = new Map<string, { namespace: string; nativeId: string }>();
   for (const { provider, idString } of platforms) {
     if (skipProviders.includes(provider)) continue;
-    const hit = episodes.find(
-      (e) => e.provider === provider && sameCollection(provider, e.episodeId.slice(provider.length + 1), idString),
-    );
-    const nativeId = hit ? toNativeId(provider, idString) : null;
+    const nativeId = findHit(provider, idString, episodes, isTv ? episode : undefined)
+      ? toNativeId(provider, idString)
+      : null;
     if (!nativeId) continue;
-    if (isTv && hit?.episodeNumber !== episode) continue;
     verified.set(`${provider}:${nativeId}`, { namespace: provider, nativeId });
   }
   if (!verified.size) return;
