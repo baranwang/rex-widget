@@ -276,19 +276,6 @@ const okCr = { data: { changeRequest: { id: "cr" } }, statusCode: 200, headers: 
 const leadBodies = (post: ReturnType<typeof mockPost>) =>
   post.mock.calls.filter(([url]) => url === CREATE_CR_URL).map(([, body]) => body);
 
-/** TMDB 这一季：前 aired 集已播出，其余是未来日期。 */
-const mockTmdbSeason = (aired: number, total = aired) =>
-  rs.spyOn(Widget.tmdb, "get").mockResolvedValue({
-    episodes: Array.from({ length: total }, (_, k) => ({ air_date: k < aired ? "2020-01-01" : "2999-01-01" })),
-  } as never);
-const collectionEpisodes = (provider: string, count: number) =>
-  Array.from({ length: count }, (_, i) => ({
-    provider,
-    episodeId: `${provider}:e${i + 1}`,
-    episodeTitle: `第${i + 1}集`,
-    episodeNumber: i + 1,
-  }));
-
 describe("reportMediaRefLeads", () => {
   const base = {
     apiKey: "k",
@@ -309,14 +296,15 @@ describe("reportMediaRefLeads", () => {
     skipProviders: ["bilibili"],
   };
 
-  test("集号和整季集数都对得上：豆瓣条目和平台合集一起提交，跳过没拉到的和 MediaRef 已有的", async () => {
+  test("豆瓣条目和拉到分集的平台合集一起提交，跳过没拉到的和 MediaRef 已有的；不再额外请求 TMDB 和整个合集", async () => {
     const post = mockPost().mockResolvedValue(okCr as never);
-    mockTmdbSeason(12);
-    const listing = rs.spyOn(scraper, "getEpisodes").mockResolvedValue(collectionEpisodes("tencent", 12));
+    const tmdb = rs.spyOn(Widget.tmdb, "get");
+    const listing = rs.spyOn(scraper, "getEpisodes");
 
     await reportMediaRefLeads(base);
 
-    expect(listing).toHaveBeenCalledWith({ provider: "tencent", idString: "cid=mzc00200mp8vo9b" });
+    expect(tmdb).not.toHaveBeenCalled();
+    expect(listing).not.toHaveBeenCalled();
     const target = { tmdb: { type: "MEDIA_TYPE_TV", id: 300 } };
     const segments = [{ wholeSeason: { season: 2, baseline: "tmdb" } }];
     expect(leadBodies(post)).toEqual([
@@ -334,33 +322,8 @@ describe("reportMediaRefLeads", () => {
     expect(options.headers["X-API-Key"]).toBe("k");
   });
 
-  test.each([
-    ["剧集还在更新：TMDB 已播 8 集（共 24 集），平台已有 9 集", 8, 24, 9],
-    ["TMDB 更新落后：TMDB 只有 10 集，平台已有 12 集", 10, 10, 12],
-  ])("%s 时照常上报", async (_, aired, total, platformCount) => {
-    const post = mockPost().mockResolvedValue(okCr as never);
-    mockTmdbSeason(aired, total);
-    rs.spyOn(scraper, "getEpisodes").mockResolvedValue(collectionEpisodes("tencent", platformCount));
-
-    await reportMediaRefLeads({ ...base, tmdbId: 306 + aired });
-
-    expect(leadBodies(post).map((body) => (body as { namespace: string }).namespace)).toEqual(["douban", "tencent"]);
-  });
-
-  test("一季拆成多个合集（合集集数少于 TMDB 已播集数）时不报", async () => {
-    const post = mockPost().mockResolvedValue(okCr as never);
-    mockTmdbSeason(24);
-    rs.spyOn(scraper, "getEpisodes").mockResolvedValue(collectionEpisodes("tencent", 12));
-
-    await reportMediaRefLeads({ ...base, tmdbId: 304 });
-
-    expect(post).not.toHaveBeenCalled();
-  });
-
   test("平台集号和 TMDB 集号不一致（合集跨季或有偏移）时不报", async () => {
     const post = mockPost().mockResolvedValue(okCr as never);
-    mockTmdbSeason(12);
-    rs.spyOn(scraper, "getEpisodes").mockResolvedValue(collectionEpisodes("tencent", 12));
 
     await reportMediaRefLeads({
       ...base,
@@ -371,12 +334,10 @@ describe("reportMediaRefLeads", () => {
     expect(post).not.toHaveBeenCalled();
   });
 
-  test("同一条 7 天内只提交一次，失败也不重试", async () => {
+  test("成功的不再提交；失败的（限额等）2 小时内也不重试", async () => {
     const post = mockPost()
       .mockRejectedValueOnce(new Error("HTTP 429"))
       .mockResolvedValue(okCr as never);
-    mockTmdbSeason(12);
-    rs.spyOn(scraper, "getEpisodes").mockResolvedValue(collectionEpisodes("tencent", 12));
     const params = { ...base, tmdbId: 301 };
 
     await reportMediaRefLeads(params);
@@ -385,9 +346,21 @@ describe("reportMediaRefLeads", () => {
     expect(leadBodies(post)).toHaveLength(2);
   });
 
+  test("请求没完成（被中断）时不记为已上报，下次会再报", async () => {
+    const post = mockPost()
+      .mockReturnValueOnce(new Promise(() => {}) as never)
+      .mockResolvedValue(okCr as never);
+    const params = { ...base, tmdbId: 309, platforms: [base.platforms[0]], skipProviders: [] };
+
+    void reportMediaRefLeads(params);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    await reportMediaRefLeads(params);
+
+    expect(leadBodies(post).filter((body) => (body as { namespace: string }).namespace === "douban")).toHaveLength(2);
+  });
+
   test("没有拉到分集的平台时什么都不提交（也不提交豆瓣）", async () => {
     const post = mockPost();
-    mockTmdbSeason(12);
     await reportMediaRefLeads({ ...base, tmdbId: 302, episodes: [] });
     expect(post).not.toHaveBeenCalled();
   });
@@ -415,17 +388,9 @@ describe("searchDanmu 上报线索", () => {
       videoPlatformInfo: [platform],
       tmdbMatch: { doubanId: "35000001", videoPlatformInfo: [platform] },
     });
-    mockTmdbSeason(12);
-    rs.spyOn(scraper, "getEpisodes")
-      .mockResolvedValueOnce([
-        {
-          provider: "tencent",
-          episodeId: "tencent:cid=mzc00200mp8vo9b&vid=v3",
-          episodeTitle: "第3集",
-          episodeNumber: 3,
-        },
-      ])
-      .mockResolvedValueOnce(collectionEpisodes("tencent", 12));
+    rs.spyOn(scraper, "getEpisodes").mockResolvedValueOnce([
+      { provider: "tencent", episodeId: "tencent:cid=mzc00200mp8vo9b&vid=v3", episodeTitle: "第3集", episodeNumber: 3 },
+    ]);
 
     await searchDanmu({
       type: "tv",
@@ -435,8 +400,8 @@ describe("searchDanmu 上报线索", () => {
       fuzzyMatch: "never",
       "global.mediaRef.apiKey": "user-key",
     } as SearchDanmuParams);
-    await flush();
 
+    // searchDanmu 返回前就已经上报完，不靠返回后的异步任务。
     expect(leadBodies(post).map((body) => (body as { namespace: string }).namespace)).toEqual(["douban", "tencent"]);
   });
 
