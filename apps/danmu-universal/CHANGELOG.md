@@ -1,5 +1,11 @@
 # @rexnow/danmu-universal
 
+## 0.18.2
+
+### Patch Changes
+
+- 50e9eb8: 修复线索不上报：去掉不可靠的集数核对；上报在返回弹幕前完成（最多等 2 秒）；只在提交成功后才记为已上报。
+
 ## 0.18.1
 
 ### Patch Changes
