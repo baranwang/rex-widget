@@ -283,14 +283,18 @@ export class DoubanMatcher {
     videoPlatformInfo: GetEpisodeParam[];
     /** 经 TMDB → IMDb 精确查到的豆瓣条目及其平台（不含按名字搜到的），可作为线索上报。 */
     tmdbMatch?: { doubanId: string; videoPlatformInfo: GetEpisodeParam[] };
+    /** 每个豆瓣条目（含按名字搜到的）各自的平台。 */
+    matches?: { doubanId: string; videoPlatformInfo: GetEpisodeParam[] }[];
   }> {
     const { doubanIds, tmdbDoubanId } = await this.getDoubanIds(params);
     this.logger.info("获取到豆瓣ID", doubanIds);
     const results: GetEpisodeParam[] = [];
     let tmdbMatch: { doubanId: string; videoPlatformInfo: GetEpisodeParam[] } | undefined;
+    const matches: { doubanId: string; videoPlatformInfo: GetEpisodeParam[] }[] = [];
     for (const doubanId of doubanIds) {
       const videoPlatformInfo = await this.getVideoPlatformInfoByDoubanId(doubanId);
       results.push(...videoPlatformInfo);
+      matches.push({ doubanId, videoPlatformInfo });
       if (doubanId === tmdbDoubanId) tmdbMatch = { doubanId, videoPlatformInfo };
     }
     this.logger.info("获取到视频平台信息", results);
@@ -298,6 +302,7 @@ export class DoubanMatcher {
       doubanIds,
       videoPlatformInfo: results,
       tmdbMatch,
+      matches,
     };
   }
 }

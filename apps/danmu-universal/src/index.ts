@@ -5,7 +5,7 @@ import { DoubanHistory } from "./experimental/douban-history";
 import { EMPTY_ANIME_CONFIG, type MediaType, PROVIDER_NAMES } from "./libs/constants";
 import { z } from "./libs/zod";
 import { DoubanMatcher } from "./matchers/douban";
-import { getMediaRefEpisodeParams, reportMediaRefLeads } from "./matchers/mediaref";
+import { getMediaRefEpisodeParams, pickLeadSource, reportMediaRefLeads } from "./matchers/mediaref";
 import { type GetEpisodeParam, scraper } from "./scrapers";
 
 if (import.meta.rstest) {
@@ -336,7 +336,7 @@ searchDanmu = async (params) => {
   let episodesParams: GetEpisodeParam[] = [];
 
   const doubanMatcher = new DoubanMatcher();
-  const { doubanIds, videoPlatformInfo, tmdbMatch } = await doubanMatcher.getEpisodeParams(params);
+  const { doubanIds, videoPlatformInfo, tmdbMatch, matches } = await doubanMatcher.getEpisodeParams(params);
   episodesParams = episodesParams.concat(normalizeDoubanTvCollections(videoPlatformInfo));
 
   try {
@@ -360,20 +360,28 @@ searchDanmu = async (params) => {
   }
 
   let episodes = await getMatchedEpisodes(episodesParams);
-  if (episodes.length && tmdbMatch && isMovieOrTv && Number.isInteger(tmdbId)) {
-    // Rex 不保证函数返回后还会跑完剩下的请求，所以等上报完成，但最多等 2 秒；失败不影响返回弹幕。
-    const report = reportMediaRefLeads({
-      apiKey: mediaRefApiKey,
-      type: mediaType,
-      tmdbId,
-      season,
-      episode: episode === undefined ? undefined : Number(episode),
-      doubanId: tmdbMatch.doubanId,
-      platforms: tmdbMatch.videoPlatformInfo,
-      episodes,
-      skipProviders: mediaRefEpisodeParams.map((item) => item.provider),
-    });
-    await Promise.race([report, new Promise((resolve) => setTimeout(resolve, 2000))]);
+  const requestedEpisode = mediaType === "tv" && episode !== undefined ? Number(episode) : undefined;
+  const leadSource = episodes.length
+    ? pickLeadSource({ tmdbMatch, matches, episodes, episode: requestedEpisode })
+    : undefined;
+  if (leadSource && isMovieOrTv && Number.isInteger(tmdbId)) {
+    // Rex 不保证返回后还会跑完剩下的请求，所以返回前等上报完成（每个请求自带 3 秒超时）。
+    // Rex 没有 setTimeout，不能用定时器兜底。上报出任何错都不影响返回弹幕。
+    try {
+      await reportMediaRefLeads({
+        apiKey: mediaRefApiKey,
+        type: mediaType,
+        tmdbId,
+        season,
+        episode: requestedEpisode,
+        doubanId: leadSource.doubanId,
+        platforms: leadSource.videoPlatformInfo,
+        episodes,
+        skipProviders: mediaRefEpisodeParams.map((item) => item.provider),
+      });
+    } catch (error) {
+      console.error("MediaRef lead report failed", error instanceof Error ? error.message : error);
+    }
   }
   if (!episodes.length && fuzzyMatch === "auto") {
     const searchEpisodes = await scraper.getEpisodeParams(params);

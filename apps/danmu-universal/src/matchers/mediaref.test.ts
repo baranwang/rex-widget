@@ -405,29 +405,96 @@ describe("searchDanmu 上报线索", () => {
     expect(leadBodies(post).map((body) => (body as { namespace: string }).namespace)).toEqual(["douban", "tencent"]);
   });
 
-  test("豆瓣是按名字搜到的（没有 tmdbMatch）时不上报", async () => {
-    const post = mockPost()
-      .mockResolvedValueOnce(mediaRefResponse("tv", []) as never)
-      .mockResolvedValue(okCr as never);
-    rs.spyOn(DoubanMatcher.prototype, "getEpisodeParams").mockResolvedValueOnce({
-      doubanIds: ["35000002"],
-      videoPlatformInfo: [{ provider: "tencent", idString: "cid=mzc00200mp8vo9b" }],
-    });
-    rs.spyOn(scraper, "getEpisodes").mockResolvedValueOnce([
-      { provider: "tencent", episodeId: "tencent:cid=mzc00200mp8vo9b&vid=v3", episodeTitle: "第3集", episodeNumber: 3 },
-    ]);
-
-    await searchDanmu({
+  const searchTv = (tmdbId: string) =>
+    searchDanmu({
       type: "tv",
-      tmdbId: "311",
-      season: "1",
+      tmdbId,
+      season: "2",
       episode: "3",
       fuzzyMatch: "never",
       "global.mediaRef.apiKey": "user-key",
     } as SearchDanmuParams);
+  const ep3 = (provider: string, idString: string) => ({
+    provider,
+    episodeId: `${provider}:${idString}&vid=v3`,
+    episodeTitle: "第3集",
+    episodeNumber: 3,
+  });
+
+  test("多季剧：豆瓣只能按名字搜到，但只有一个条目拉到这一集时上报这个条目", async () => {
+    const post = mockPost()
+      .mockResolvedValueOnce(mediaRefResponse("tv", []) as never)
+      .mockResolvedValue(okCr as never);
+    const right = { provider: "tencent", idString: "cid=mzc00200mp8vo9b" };
+    const wrong = { provider: "iqiyi", idString: "entityId=5328486914190101" };
+    rs.spyOn(DoubanMatcher.prototype, "getEpisodeParams").mockResolvedValueOnce({
+      doubanIds: ["35000002", "35000003"],
+      videoPlatformInfo: [right, wrong],
+      matches: [
+        { doubanId: "35000002", videoPlatformInfo: [right] },
+        { doubanId: "35000003", videoPlatformInfo: [wrong] },
+      ],
+    });
+    rs.spyOn(scraper, "getEpisodes").mockResolvedValueOnce([ep3("tencent", right.idString)]);
+
+    await searchTv("311");
+
+    expect(
+      leadBodies(post).map((body) => [
+        (body as { namespace: string }).namespace,
+        (body as { nativeId: string }).nativeId,
+      ]),
+    ).toEqual([
+      ["douban", "35000002"],
+      ["tencent", "mzc00200mp8vo9b"],
+    ]);
+  });
+
+  test("按名字搜到的多个豆瓣条目都拉到了这一集（有歧义）时不上报", async () => {
+    const post = mockPost()
+      .mockResolvedValueOnce(mediaRefResponse("tv", []) as never)
+      .mockResolvedValue(okCr as never);
+    const a = { provider: "tencent", idString: "cid=mzc00200mp8vo9b" };
+    const b = { provider: "bilibili", idString: "seasonId=28770" };
+    rs.spyOn(DoubanMatcher.prototype, "getEpisodeParams").mockResolvedValueOnce({
+      doubanIds: ["35000004", "35000005"],
+      videoPlatformInfo: [a, b],
+      matches: [
+        { doubanId: "35000004", videoPlatformInfo: [a] },
+        { doubanId: "35000005", videoPlatformInfo: [b] },
+      ],
+    });
+    rs.spyOn(scraper, "getEpisodes").mockResolvedValueOnce([ep3("tencent", a.idString), ep3("bilibili", b.idString)]);
+
+    await searchTv("312");
     await flush();
 
     expect(leadBodies(post)).toEqual([]);
+  });
+
+  test("Rex 没有 setTimeout 时 searchDanmu 仍返回弹幕并完成上报", async () => {
+    const post = mockPost()
+      .mockResolvedValueOnce(mediaRefResponse("tv", []) as never)
+      .mockResolvedValue(okCr as never);
+    const platform = { provider: "tencent", idString: "cid=mzc00200mp8vo9b" };
+    rs.spyOn(DoubanMatcher.prototype, "getEpisodeParams").mockResolvedValueOnce({
+      doubanIds: ["35000006"],
+      videoPlatformInfo: [platform],
+      tmdbMatch: { doubanId: "35000006", videoPlatformInfo: [platform] },
+    });
+    rs.spyOn(scraper, "getEpisodes").mockResolvedValueOnce([ep3("tencent", platform.idString)]);
+
+    const realSetTimeout = globalThis.setTimeout;
+    (globalThis as { setTimeout?: unknown }).setTimeout = undefined;
+    let result: Awaited<ReturnType<typeof searchDanmu>>;
+    try {
+      result = await searchTv("313");
+    } finally {
+      globalThis.setTimeout = realSetTimeout;
+    }
+
+    expect(result.animes).toHaveLength(1);
+    expect(leadBodies(post)).toHaveLength(2);
   });
 });
 
